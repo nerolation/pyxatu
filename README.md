@@ -10,3 +10,4 @@ On the first run, the default configuration file will be copied to your current 
    import pyxatu
 
    xatu = pyxatu.PyXatu()
+   ```
