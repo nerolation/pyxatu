@@ -55,10 +55,25 @@ class TestClickhouseClient(unittest.TestCase):
     def test_fetch_data(self, mock_execute_query, mock_build_query):
         mock_build_query.return_value = 'SELECT column1 FROM some_table'
         mock_execute_query.return_value = pd.DataFrame({'column1': [1, 2, 3]})
-        self.setUp()
-        result = self.client.fetch_data(table='some_table')
+
+        # Call the real fetch_data method and test the result
+        result = self.client.fetch_data(
+            table='test_table', 
+            slot=1234, 
+            columns=['col1', 'col2'], 
+            where=None, 
+            time_interval=None, 
+            network='mainnet', 
+            orderby=None, 
+            final_condition=None, 
+            limit=None
+        )
+
+        # Assert that mock_build_query and mock_execute_query were called
         mock_build_query.assert_called_once()
-        mock_execute_query.assert_called_once_with('SELECT column1 FROM some_table', '*')
+        mock_execute_query.assert_called_once_with('SELECT column1 FROM some_table', ['col1', 'col2'])
+
+        # Verify the result is as expected
         self.assertIsInstance(result, pd.DataFrame)
         self.assertFalse(result.empty)
 
