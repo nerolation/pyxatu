@@ -2,10 +2,11 @@ import logging
 import requests
 import pandas as pd
 from io import StringIO
+from datetime import datetime, timezone
 from typing import Optional, List
 from requests.auth import HTTPBasicAuth
 
-from pyxatu.utils import retry_on_failure
+from pyxatu.utils import retry_on_failure, CONSTANTS
 
 class ClickhouseClient:
     def __init__(self, url: str, user: str, password: str, timeout: int = 1500) -> None:
@@ -44,23 +45,35 @@ class ClickhouseClient:
 
     def fetch_data(self, table: str, slot: Optional[int] = None, columns: str = '*', where: Optional[str] = None,
                    time_interval: Optional[str] = None, network: str = "mainnet", orderby: Optional[str] = None,
-                   final_condition: Optional[str] = None) -> pd.DataFrame:
-        query = self._build_query(table, slot, columns, where, time_interval, network, orderby, final_condition)
+                   final_condition: Optional[str] = None, limit: int = None) -> pd.DataFrame:
+        query = self._build_query(
+            table = table, 
+            slot = slot, 
+            columns = columns, 
+            where = where, 
+            time_interval = time_interval, 
+            network = network, 
+            orderby = orderby, 
+            final_condition = final_condition,
+            limit = limit
+        )
         return self.execute_query(query, columns)
 
     def _build_query(self, table: str, slot: Optional[int], columns: str, where: Optional[str], 
                      time_interval: Optional[str], network: str, orderby: Optional[str], 
-                     final_condition: Optional[str]) -> str:
+                     final_condition: Optional[str], limit: int = None) -> str:
         query = f"SELECT DISTINCT {columns} FROM {table}"
         
         conditions = []
         
-        if slot:
+        if isinstance(slot, int):
             date_filter = self._get_sql_date_filter(slot=slot)
             conditions.append(date_filter)
-        elif slots and isinstance(slots, list) and len(slots) == 2:
-            date_filter = self._get_sql_date_filter(slots=slots)
+            conditions.append(f"slot = {int(slot)}")
+        elif slot and isinstance(slot, list) and len(slot) == 2:
+            date_filter = self._get_sql_date_filter(slot=slot)
             conditions.append(date_filter)
+            conditions.append(f"slot >= {int(slot[0])} AND slot < {int(slot[1])}")
         
         if where: conditions.append(where)
         if time_interval: conditions.append(f"slot_start_date_time > NOW() - INTERVAL '{time_interval}'")
@@ -75,15 +88,19 @@ class ClickhouseClient:
         
         return query
     
-    def get_slot_datetime(self, slot: int) -> int:
+    def get_slot_datetime(self, slot: int, as_type: str = "str") -> int:
         slot_timestamp = CONSTANTS["GENESIS_TIME_ETH_POS"] + (slot * CONSTANTS["SECONDS_PER_SLOT"])
-        slot_datetime = datetime.fromtimestamp(slot_timestamp)
-        return int(slot_datetime.timestamp() * 1000) 
+        slot_datetime = datetime.fromtimestamp(slot_timestamp, tz=timezone.utc)
+        if as_type == "str":
+            return slot_datetime.strftime('%Y-%m-%d %H:%M:%S')
+        elif as_type == "int":
+            return int(slot_datetime.timestamp())
+            
 
     def get_time_in_slot(self, slot: int, ts: int) -> int:
-        return ts - get_slot_datetime(slot) 
+        return ts - get_slot_datetime(slot, as_type = "int")
 
-    def _get_sql_date_filter(self, slot: Optional[int] = None, slots: Optional[List[int]] = None) -> str:
+    def _get_sql_date_filter(self, slot: Optional[int] = None) -> str:
         """
         Returns a SQL-compatible date filter for a given Ethereum PoS slot or a range of slots.
         This is useful to minimize the amount of requested resources on the Xatu backend.
@@ -105,9 +122,9 @@ class ClickhouseClient:
             return f"slot_start_date_time >= '{slot_date_str}'"
 
         # Case 2: List of two slots provided (must be a list of exactly two integers)
-        elif isinstance(slots, list) and len(slots) == 2 and all(isinstance(s, int) for s in slots):
-            lower_slot_date_str = self.get_slot_datetime(slots[0])
-            upper_slot_date_str = self.get_slot_datetime(slots[1])
+        elif isinstance(slot, list) and len(slot) == 2 and all(isinstance(s, int) for s in slot):
+            lower_slot_date_str = self.get_slot_datetime(slot[0])
+            upper_slot_date_str = self.get_slot_datetime(slot[1])
             return f"slot_start_date_time >= '{lower_slot_date_str}' AND slot_start_date_time < '{upper_slot_date_str}'"
 
         else:

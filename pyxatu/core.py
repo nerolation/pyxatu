@@ -116,14 +116,14 @@ class PyXatu:
             custom_data_dir=custom_data_dir
         )
     
-    def get_reorgs_in_slots(self, slot: Optional[int] = None, where: Optional[str] = None, 
+    def get_reorgs_in_slots(self, slots: List[int] = None, where: Optional[str] = None, 
                    time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
                    orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
                    store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
        
         potential_reorgs = self.data_retriever.get_data(
             'beaconchain_reorgs',
-            slot=slot, 
+            slot=slots, 
             columns="slot-depth", 
             where=where, 
             time_interval=time_interval, 
@@ -135,8 +135,8 @@ class PyXatu:
             custom_data_dir=custom_data_dir
         )
         canonical = self.get_slots( 
-            slot=slot, 
-            columns=columns, 
+            slot=[slots[0]-32, slots[1]+31], 
+            columns="slot", 
             where=where, 
             time_interval=time_interval, 
             network=network, 
@@ -157,6 +157,23 @@ class PyXatu:
         return self.data_retriever.get_data(
             'beaconchain_canonical',
             slot=slot, 
+            columns=columns, 
+            where=where, 
+            time_interval=time_interval, 
+            network=network, 
+            orderby=orderby,
+            final_condition=final_condition,
+            limit=limit,
+            store_result_in_parquet=store_result_in_parquet,
+            custom_data_dir=custom_data_dir
+        )
+    
+     def get_missed_or_failed_attestations_of_epoch(self, slot: Optional[int] = None, columns: Optional[str] = "*", where: Optional[str] = None, 
+                  time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
+                  orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
+                  store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+        proposers = self.get_proposer_of_slot(
+            slot=[slot//32, slot//32+32], 
             columns=columns, 
             where=where, 
             time_interval=time_interval, 
