@@ -5,6 +5,7 @@ from requests.auth import HTTPBasicAuth
 import pandas as pd
 from io import StringIO
 import time
+from tqdm.auto import tqdm
 from pathlib import Path
 import shutil
 import logging
@@ -197,8 +198,7 @@ class PyXatu:
                             network: str = "mainnet", max_retries: int = 1, orderby: Optional[str] = None,
                             final_condition: Optional[str] = None, limit: int = None, 
                             store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
-        
-        committee= self.data_retriever.get_data(
+        committee = self.data_retriever.get_data(
             'beaconchain_beacon_committee',
             slot=slot, 
             columns=columns, 
@@ -212,19 +212,18 @@ class PyXatu:
             custom_data_dir=custom_data_dir
         )
         committee["validators"] = committee["validators"].apply(lambda x: eval(x))
-        duties = pd.DataFrame(columns=["slot", "validator"])
+        duties = pd.DataFrame(columns=["slot", "validators"])
         for i in committee.slot.unique():
             _committee = committee[committee["slot"] == i]
             all_validators = sorted([item for sublist in _committee["validators"] for item in sublist])
-            temp_df = pd.DataFrame({"slot": [i] * len(all_validators), "validator": all_validators})
+            temp_df = pd.DataFrame({"slot": [i] * len(all_validators), "validators": all_validators})
             duties = pd.concat([duties, temp_df], ignore_index=True).drop_duplicates()
         return duties.reset_index(drop=True)
     
     def get_checkpoints_for_slot(self, slot: int):
-        epoch_start_slot = slot // 32 * 32
-        last_epoch_start_slot = epoch_start_slot - 32
-        
-        slots = self.get_slots([last_epoch_start_slot - 32, epoch_start_slot+32], columns="slot,block_root", orderby="slot")
+        epoch_start_slot = int(slot // 32 * 32)
+        last_epoch_start_slot = int(epoch_start_slot - 32)
+        slots = self.get_slots(slot=[last_epoch_start_slot - 32, epoch_start_slot + 32], columns="slot,block_root", orderby="slot")
         head, target, source = [None]*3
         
         _slot = slot
@@ -252,77 +251,72 @@ class PyXatu:
               
     
     def get_elaborated_attestations(self, epoch: Optional[int] = None, what: str = "source,target,head", 
-                            columns: Optional[str] = "*", where: Optional[str] = None, time_interval: Optional[str] = None, 
-                            network: str = "mainnet", max_retries: int = 1, orderby: Optional[str] = None,
-                            final_condition: Optional[str] = None, limit: int = None, 
-                            store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+                                    columns: Optional[str] = "*", where: Optional[str] = None, time_interval: Optional[str] = None, 
+                                    network: str = "mainnet", max_retries: int = 1, orderby: Optional[str] = None,
+                                    final_condition: Optional[str] = None, limit: int = None, 
+                                    store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+
         if not isinstance(epoch, list):
-            epoch = [epoch, epoch+1]
-        
-        for epoch in range(epoch[0], epoch[-1]):
-            duties = self.get_duties_for_slots(
-                slot=[epoch[0] * 32, epoch[-1]*32+32], 
-                columns="slot, validator", 
-                where=where, 
-                time_interval=time_interval, 
-                network=network, 
-                orderby=orderby,
-                final_condition=final_condition,
-                limit=limit,
-                store_result_in_parquet=store_result_in_parquet,
-                custom_data_dir=custom_data_dir
-            ) 
-            attestations = self.get_attestation_of_slot(
-                slot=[epoch[0] * 32, epoch[-1]*32+32], 
-                columns=columns, 
-                where=where, 
-                time_interval=time_interval, 
-                network=network, 
-                orderby=orderby,
-                final_condition=final_condition,
-                limit=limit,
-                store_result_in_parquet=store_result_in_parquet,
-                custom_data_dir=custom_data_dir
-            )
-            final_df = pd.DataFrame(columns=["slot", "validator", "status"])
-            for _slot in sorted(attestations.slot.unique()):
-                head, target, source = self.get_checkpoints_for_slot(_slot)
-                _attestations = attestations[attestations["slot"] == _slot]
-                _duties = duties[duties["slot"] == _slot]
-                _all = set(_duties.validators.tolist())
-                voting_validators = set(_attestations.validators.tolist())
-                correct = set()
-                #wrong = set()
-                if "source" in what:
-                    correct = set(_attestations[_attestations["source_root"] == source].validators.tolist())
-                    correct = correct.intersection(_all)
-                    #wrong += (voting_validators - correct)
-                    _attestations = _attestations[_attestations["validators"].isin(correct)]
-                if "target" in what:
-                    correct = set(_attestations[_attestations["target_root"] == target].validators.tolist())
-                    correct = correct.intersection(_all)
-                    #wrong += (voting_validators - correct)
-                    _attestations = _attestations[_attestations["validators"].isin(correct)]
-                if "head" in what:
-                    correct = set(_attestations[_attestations["beacon_block_root"] == head].validators.tolist())
-                    correct = correct.intersection(_all)
-                    #wrong += (voting_validators - correct)
-                    _attestations = _attestations[_attestations["validators"].isin(correct)]
-                correct_validators = set(_attestations.validators.tolist())
-                failing_validators = _all.intersection(voting_validators) - correct_validators
+            epoch = [epoch, epoch + 1]
+
+        duties = self.get_duties_for_slots(
+            slot=[int(epoch[0] * 32), int(epoch[-1] * 32 + 32)], 
+            columns="slot, validators", 
+            where=where, 
+            time_interval=time_interval, 
+            network=network, 
+            orderby="slot",
+            final_condition=final_condition,
+            limit=limit,
+            store_result_in_parquet=store_result_in_parquet,
+            custom_data_dir=custom_data_dir
+        )
+
+        attestations = self.get_attestation_of_slot(
+            slot=[epoch[0] * 32, epoch[-1] * 32 + 32], 
+            columns=columns, 
+            where=where, 
+            time_interval=time_interval, 
+            network=network, 
+            orderby=orderby,
+            final_condition=final_condition,
+            limit=limit,
+            store_result_in_parquet=store_result_in_parquet,
+            custom_data_dir=custom_data_dir
+        )
+
+        # Initialize empty list to store all status data
+        status_data = []
+
+        # Process each slot
+        for _slot in tqdm(sorted(attestations.slot.unique()), desc="Processing slots"):
+            head, target, source = self.get_checkpoints_for_slot(_slot)
+            _attestations = attestations[attestations["slot"] == _slot]
+            _duties = duties[duties["slot"] == _slot]
+            _all = set(_duties.validators.tolist())
+            voting_validators = set(_attestations.validators.tolist())
+
+            def process_vote(vote_type: str, root_value: str) -> None:
+                correct = set(_attestations[_attestations[f"{vote_type}_root"] == root_value].validators.tolist())
+                correct = correct.intersection(_all)
+                failing_validators = _all.intersection(voting_validators) - correct
                 offline_validators = _all - voting_validators
-                
-                status_data = []
-                status_data.extend([(_slot, v, "correct") for v in correct_validators])
-                status_data.extend([(_slot, v, "failed") for v in failing_validators])
-                status_data.extend([(_slot, v, "offline") for v in offline_validators])
 
-                temp_df = pd.DataFrame(status_data, columns=["slot", "validator", "status"])
-                final_df = pd.concat([final_df, temp_df], ignore_index=True)
+                status_data.extend([(_slot, v, "correct", vote_type) for v in correct])
+                status_data.extend([(_slot, v, "failed", vote_type) for v in failing_validators])
+                status_data.extend([(_slot, v, "offline", vote_type) for v in offline_validators])
 
-            final_df = final_df.drop_duplicates()
+            if "source" in what:
+                process_vote("source", source)
+            if "target" in what:
+                process_vote("target", target)
+            if "head" in what:
+                process_vote("beacon_block", head)
 
-            return final_df = final_df.reset_index(drop=True)
+        final_df = pd.DataFrame(status_data, columns=["slot", "validator", "status", "vote_type"])
+        final_df = final_df.drop_duplicates().reset_index(drop=True)
+
+        return final_df
 
                 
 

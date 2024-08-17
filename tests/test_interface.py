@@ -283,6 +283,21 @@ class TestDataRetriever(unittest.TestCase):
         res = res[0:10] + res[-10:]
         self.assertGreater(len(res), 0)
         print_test_ok(test, how)
+        
+        
+    def test_get_elaborated_attestations_exampleSlotRange(self):
+        test = "xatu.get_elaborated_attestations"
+        how = "exampleSlotRange"
+        func = eval(test)
+        exampleEpochRange = [9437146//32, 9437146//32]
+        res = func(epoch = exampleEpochRange, orderby="slot,block_slot,beacon_block_root", columns="slot, block_slot, meta_network_name, validators, beacon_block_root,source_root,target_root", limit=10)
+        df = shorten_df(res.sort_values("slot"))
+        expect = strip_str('       slot  validator   status     vote_type\n0   9437120     835511  offline  beacon_block\n1   9437120    1105848  offline  beacon_block\n2   9437120     860089  offline  beacon_block\n3   9437120     262075  offline  beacon_block\n4   9437120      90047  offline  beacon_block\n5   9437120    1228737  offline  beacon_block\n6   9437120     696258  offline  beacon_block\n7   9437120     729026  offline  beacon_block\n8   9437120     327589  offline  beacon_block\n9   9437120     663463  offline  beacon_block\n10  9437120     425962  offline  beacon_block\n11  9437120    1056750  offline  beacon_block\n12  9437120     466930  offline  beacon_block\n13  9437120     196595  offline  beacon_block\n14  9437120    1384437  offline  beacon_block\n15  9437120    1138677  offline  beacon_block\n16  9437120     983030  offline  beacon_block\n17  9437120     983037  offline  beacon_block\n18  9437120    1261567  offline  beacon_block\n19  9437120    1357824  correct        source')
+        actual = dataframe_to_str(df)
+        if expect == actual:
+            print_test_ok(test, how)
+        else:
+            print_test_failed(test, how)
             
 if __name__ == '__main__':
     unittest.main()

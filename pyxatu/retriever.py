@@ -8,7 +8,7 @@ class DataRetriever:
         self.client = client
         self.tables = tables
 
-    def get_data(self, data_table: str, slot: Optional[int] = None, columns: Optional[List[str]] = "*", 
+    def get_data(self, data_table: str, slot: Optional[int] = None, columns: str = "*", 
                  where: Optional[str] = None, time_interval: Optional[str] = None, network: str = "mainnet", 
                  orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
                  store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
