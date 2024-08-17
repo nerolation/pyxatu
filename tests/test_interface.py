@@ -229,6 +229,53 @@ class TestDataRetriever(unittest.TestCase):
             print_test_ok(test, how)
         else:
             print_test_failed(test, how)
+            
+            
+    def test_get_attestation_event_of_slot_exampleSlot(self):
+
+        test = "xatu.get_attestation_event_of_slot"
+        how = "exampleSlot"
+        func = eval(test)
+        exampleSlot = 9000000
+        res = func(exampleSlot, columns="epoch, slot, meta_network_name, attesting_validator_index, beacon_block_root", orderby="slot, beacon_block_root")
+        res = shorten_df(res)
+        expect = strip_str('     epoch     slot  block_slot meta_network_name validators                                                   beacon_block_root\n0   281250  9000000     9000001           mainnet      27036  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n1   281250  9000000     9000001           mainnet     818774  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n2   281250  9000000     9000001           mainnet     525990  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n3   281250  9000000     9000001           mainnet    1064538  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n4   281250  9000000     9000001           mainnet    1165372  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n5   281250  9000000     9000001           mainnet     231665  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n6   281250  9000000     9000001           mainnet    1295496  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n7   281250  9000000     9000001           mainnet      65068  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n8   281250  9000000     9000001           mainnet     929102  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n9   281250  9000000     9000001           mainnet     282532  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n10  281250  9000000     9000030           mainnet     770136  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n11  281250  9000000     9000030           mainnet     410342  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n12  281250  9000000     9000030           mainnet    1329275  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n13  281250  9000000     9000030           mainnet    1041064  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n14  281250  9000000     9000030           mainnet     903579  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n15  281250  9000000     9000030           mainnet    1242212  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n16  281250  9000000     9000030           mainnet    1220573  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n17  281250  9000000     9000030           mainnet    1026592  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n18  281250  9000000     9000030           mainnet     185881  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n19  281250  9000000     9000030           mainnet     428850  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6')
+        actual = dataframe_to_str(res)
+        #if expect == actual:
+        #    print_test_ok(test, how)
+        #else:
+        #    print_test_failed(test, how)
+
+    def test_get_attestation_event_of_slot_exampleSlotRange(self):
+
+        test = "xatu.get_attestation_event_of_slot"
+        how = "exampleSlotRange"
+        func = eval(test)
+        exampleSlotRange = [9000000, 9000010]
+        res = func(exampleSlotRange, columns="epoch, slot, meta_network_name, attesting_validator_index, beacon_block_root", orderby="slot, beacon_block_root")
+        res = shorten_df(res)
+        expect = strip_str('     epoch     slot  block_slot meta_network_name validators                                                   beacon_block_root\n0   281250  9000000     9000001           mainnet      27036  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n1   281250  9000000     9000001           mainnet     818774  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n2   281250  9000000     9000001           mainnet     525990  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n3   281250  9000000     9000001           mainnet    1064538  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n4   281250  9000000     9000001           mainnet    1165372  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n5   281250  9000000     9000001           mainnet     231665  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n6   281250  9000000     9000001           mainnet    1295496  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n7   281250  9000000     9000001           mainnet      65068  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n8   281250  9000000     9000001           mainnet     929102  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n9   281250  9000000     9000001           mainnet     282532  0xcc8a36da0d5112c8dd602530ac7c7b8364edfd92cdc6f0d62365de392e8e5bb6\n10  281250  9000009     9000054           mainnet     484179  0x868b1248362f21d40fd8d7fa844178ba3bb0c243113c6a24ad9e588410f3f1d3\n11  281250  9000009     9000054           mainnet     961742  0x868b1248362f21d40fd8d7fa844178ba3bb0c243113c6a24ad9e588410f3f1d3\n12  281250  9000009     9000054           mainnet      22687  0x868b1248362f21d40fd8d7fa844178ba3bb0c243113c6a24ad9e588410f3f1d3\n13  281250  9000009     9000054           mainnet     379177  0x868b1248362f21d40fd8d7fa844178ba3bb0c243113c6a24ad9e588410f3f1d3\n14  281250  9000009     9000054           mainnet     298751  0x868b1248362f21d40fd8d7fa844178ba3bb0c243113c6a24ad9e588410f3f1d3\n15  281250  9000009     9000054           mainnet     514324  0x868b1248362f21d40fd8d7fa844178ba3bb0c243113c6a24ad9e588410f3f1d3\n16  281250  9000009     9000054           mainnet    1134305  0x868b1248362f21d40fd8d7fa844178ba3bb0c243113c6a24ad9e588410f3f1d3\n17  281250  9000009     9000054           mainnet     194459  0x868b1248362f21d40fd8d7fa844178ba3bb0c243113c6a24ad9e588410f3f1d3\n18  281250  9000009     9000054           mainnet     387907  0x868b1248362f21d40fd8d7fa844178ba3bb0c243113c6a24ad9e588410f3f1d3\n19  281250  9000009     9000054           mainnet    1056242  0x868b1248362f21d40fd8d7fa844178ba3bb0c243113c6a24ad9e588410f3f1d3')
+        actual = dataframe_to_str(res)
+        #if expect == actual:
+        #    print_test_ok(test, how)
+        #else:
+        #    print_test_failed(test, how)
+
+    def test_get_attestation_event_of_slot_timeInterval(self):
+
+        test = "xatu.get_attestation_event_of_slot"
+        how = "timeInterval"
+        func = eval(test)
+        exampleSlotRange = [9314159, 9314160]
+        time_interval = "365 days"
+        res = func(slot=exampleSlotRange, time_interval=time_interval, columns="epoch, slot, meta_network_name, attesting_validator_index, beacon_block_root", orderby="slot, beacon_block_root")
+        res = shorten_df(res)
+        expect = strip_str('     epoch     slot  block_slot meta_network_name validators                                                   beacon_block_root\n0   291067  9314159     9314160           mainnet      19497  0x9e29dd208381bb7c561d651079573481add5c8fa77a2306e9b2f4e1de99bc9d3\n1   291067  9314159     9314160           mainnet    1244571  0x9e29dd208381bb7c561d651079573481add5c8fa77a2306e9b2f4e1de99bc9d3\n2   291067  9314159     9314160           mainnet     865594  0x9e29dd208381bb7c561d651079573481add5c8fa77a2306e9b2f4e1de99bc9d3\n3   291067  9314159     9314160           mainnet     327510  0x9e29dd208381bb7c561d651079573481add5c8fa77a2306e9b2f4e1de99bc9d3\n4   291067  9314159     9314160           mainnet    1135475  0x9e29dd208381bb7c561d651079573481add5c8fa77a2306e9b2f4e1de99bc9d3\n5   291067  9314159     9314160           mainnet     264110  0x9e29dd208381bb7c561d651079573481add5c8fa77a2306e9b2f4e1de99bc9d3\n6   291067  9314159     9314160           mainnet     704041  0x9e29dd208381bb7c561d651079573481add5c8fa77a2306e9b2f4e1de99bc9d3\n7   291067  9314159     9314160           mainnet     436728  0x9e29dd208381bb7c561d651079573481add5c8fa77a2306e9b2f4e1de99bc9d3\n8   291067  9314159     9314160           mainnet     403003  0x9e29dd208381bb7c561d651079573481add5c8fa77a2306e9b2f4e1de99bc9d3\n9   291067  9314159     9314160           mainnet     330022  0x9e29dd208381bb7c561d651079573481add5c8fa77a2306e9b2f4e1de99bc9d3\n10  291067  9314159     9314171           mainnet     860220  0xfd4edfa59c12d801496debaff49de3b70e93f0f69e261d9ba17fdf9b2d1ca383\n11  291067  9314159     9314171           mainnet     982340  0xfd4edfa59c12d801496debaff49de3b70e93f0f69e261d9ba17fdf9b2d1ca383\n12  291067  9314159     9314171           mainnet    1078042  0xfd4edfa59c12d801496debaff49de3b70e93f0f69e261d9ba17fdf9b2d1ca383\n13  291067  9314159     9314171           mainnet    1013415  0xfd4edfa59c12d801496debaff49de3b70e93f0f69e261d9ba17fdf9b2d1ca383\n14  291067  9314159     9314171           mainnet     703912  0xfd4edfa59c12d801496debaff49de3b70e93f0f69e261d9ba17fdf9b2d1ca383\n15  291067  9314159     9314171           mainnet    1308220  0xfd4edfa59c12d801496debaff49de3b70e93f0f69e261d9ba17fdf9b2d1ca383\n16  291067  9314159     9314171           mainnet    1237657  0xfd4edfa59c12d801496debaff49de3b70e93f0f69e261d9ba17fdf9b2d1ca383\n17  291067  9314159     9314171           mainnet     827864  0xfd4edfa59c12d801496debaff49de3b70e93f0f69e261d9ba17fdf9b2d1ca383\n18  291067  9314159     9314171           mainnet    1237985  0xfd4edfa59c12d801496debaff49de3b70e93f0f69e261d9ba17fdf9b2d1ca383\n19  291067  9314159     9314171           mainnet    1416180  0xfd4edfa59c12d801496debaff49de3b70e93f0f69e261d9ba17fdf9b2d1ca383')
+        actual = dataframe_to_str(res)
+        #if expect == actual:
+        #    print_test_ok(test, how)
+        #else:
+        #    print_test_failed(test, how)
 
     def test_get_reorgs_in_slots_exampleSlotRange(self):
 

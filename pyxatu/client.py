@@ -115,7 +115,6 @@ class ClickhouseClient:
         Raises:
             ValueError: If neither a valid `slot` nor a valid list of `slots` is provided.
         """
-        print(slot)
         # Case 1: Single slot provided (it must be an integer)
         if isinstance(slot, int):
             slot_date_str = self.get_slot_datetime(slot)

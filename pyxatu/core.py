@@ -103,6 +103,31 @@ class PyXatu:
             res = res.explode("validators").reset_index(drop=True)
         
         return res
+    
+    def get_attestation_event_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", 
+                         where: Optional[str] = None, 
+                         time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
+                         orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
+                         store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+        
+        res = self.data_retriever.get_data(
+            'beaconchain_event_attestations',
+            slot=slot, 
+            columns=columns, 
+            where=where, 
+            time_interval=time_interval, 
+            network=network, 
+            orderby=orderby,
+            final_condition=final_condition,
+            limit=limit,
+            store_result_in_parquet=store_result_in_parquet,
+            custom_data_dir=custom_data_dir
+        )
+        #if "attesting_validator_index" in res.columns.tolist():
+        #    res["attesting_validator_index"] = res["attesting_validator_index"].apply(lambda x: eval(x))
+        #    res = res.explode("attesting_validator_index").reset_index(drop=True)
+        
+        return res
 
     def get_proposer_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", where: Optional[str] = None, 
                       time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
@@ -251,10 +276,11 @@ class PyXatu:
               
     
     def get_elaborated_attestations(self, epoch: Optional[int] = None, what: str = "source,target,head", 
-                                    columns: Optional[str] = "*", where: Optional[str] = None, time_interval: Optional[str] = None, 
-                                    network: str = "mainnet", max_retries: int = 1, orderby: Optional[str] = None,
-                                    final_condition: Optional[str] = None, limit: int = None, 
-                                    store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+                                    columns: Optional[str] = "*", where: Optional[str] = None, 
+                                    time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
+                                    orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None, 
+                                    store_result_in_parquet: bool = None, custom_data_dir: str = None, 
+                                    only_status="correct,failed,offline") -> Any:
 
         if not isinstance(epoch, list):
             epoch = [epoch, epoch + 1]
@@ -301,10 +327,13 @@ class PyXatu:
                 correct = correct.intersection(_all)
                 failing_validators = _all.intersection(voting_validators) - correct
                 offline_validators = _all - voting_validators
-
-                status_data.extend([(_slot, v, "correct", vote_type) for v in correct])
-                status_data.extend([(_slot, v, "failed", vote_type) for v in failing_validators])
-                status_data.extend([(_slot, v, "offline", vote_type) for v in offline_validators])
+                
+                if "correct" in only_status:
+                    status_data.extend([(_slot, v, "correct", vote_type) for v in correct])
+                if "failed" in only_status:
+                    status_data.extend([(_slot, v, "failed", vote_type) for v in failing_validators])
+                if "offline" in only_status:
+                    status_data.extend([(_slot, v, "offline", vote_type) for v in offline_validators])
 
             if "source" in what:
                 process_vote("source", source)
@@ -317,10 +346,24 @@ class PyXatu:
         final_df = final_df.drop_duplicates().reset_index(drop=True)
 
         return final_df
-
-                
-
-
+    
+    def get_block_size(slot: List[int], columns: Optional[str] = "*", where: Optional[str] = None, 
+                time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
+                orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None, 
+                store_result_in_parquet: bool = None, custom_data_dir: str = None, ):
+        sizes = self.get_slots( 
+            slot=[slots[0], slots[-1]] if isinstance(slots, list) else slot, 
+            columns="slot, execution_payload_transactions_count, execution_payload_transactions_total_bytes, execution_payload_transactions_total_bytes_compressed", 
+            where=where, 
+            time_interval=time_interval, 
+            network=network, 
+            orderby=orderby,
+            final_condition=final_condition,
+            limit=limit,
+            store_result_in_parquet=store_result_in_parquet,
+            custom_data_dir=custom_data_dir
+        ) 
+        return sizes
     
     def execute_query(self, query: str, columns: Optional[str] = "*", time_interval: Optional[str] = None) -> Any:
         return self.client.execute_query(query, columns)
