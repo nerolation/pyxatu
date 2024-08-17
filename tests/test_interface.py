@@ -35,10 +35,20 @@ def print_test_failed(test, how):
 def shorten_df(df):
     return pd.concat([df.iloc[0:10], df.iloc[-10:]], ignore_index=True)
 
-print("xatu.read_clickhouse_config_from_env() ", xatu.read_clickhouse_config_from_env())
-print("xatu.read_clickhouse_config() ", xatu.read_clickhouse_config()[0:2])
-
 class TestDataRetriever(unittest.TestCase):
+    
+    def test_configs_somewhere(self):
+        one_good = False
+        if xatu.read_clickhouse_config_from_env()[1] not in ["default_user", ""]:
+            print_test_ok("read_clickhouse_config", "from_env")
+            one_good = True
+
+        if xatu.read_clickhouse_config_locally()[1] not in ["default_user", ""]:
+            print_test_ok("read_clickhouse_config", "locally")
+            one_good = True
+            
+        if not one_good:
+            print_test_failed("read_clickhouse_config", "locally+env")
 
     def test_get_slots_exampleSlot(self):
         test = "xatu.get_slots"
@@ -246,6 +256,33 @@ class TestDataRetriever(unittest.TestCase):
             print_test_ok(test, how)
         else:
             print_test_failed(test, how)
+            
+    def test_get_missed_slots_exampleSlotRange(self):
+
+        test = "xatu.get_missed_slots"
+        how = "exampleSlotRange"
+        func = eval(test)
+        exampleSlotRange = [9000000, 9005100]
+        res = list(func(exampleSlotRange, columns="slot", orderby="slot"))
+        res = res[0:10] + res[-10:]
+        print(res)
+        expect = '[9000961, 9001089, 9001985, 9004675, 9000840, 9002896, 9001619, 9000726, 9004568, 9004696, 9002713, 9000921, 9003104, 9004001, 9001058, 9000803, 9004258, 9004897, 9002486, 9005047]'
+        actual = str(res)
+        self.assertEqual(expect, actual)
+        print_test_ok(test, how)
+    
+
+
+    def test_get_missed_slots_timeInterval(self):
+
+        test = "xatu.get_missed_slots"
+        how = "timeInterval"
+        func = eval(test)
+        time_interval = "30 days"
+        res = list(func(time_interval=time_interval, columns="slot",))
+        res = res[0:10] + res[-10:]
+        self.assertGreater(len(res), 0)
+        print_test_ok(test, how)
             
 if __name__ == '__main__':
     unittest.main()

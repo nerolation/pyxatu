@@ -46,7 +46,7 @@ class TestPyXatu(unittest.TestCase):
         # Ensure that DataRetriever is initialized
         self.assertIsNotNone(pyxatu_instance.data_retriever)
 
-    @patch('pyxatu.core.PyXatu.read_clickhouse_config', return_value=("http://test-url", "user", "pass"))
+    @patch('pyxatu.core.PyXatu.read_clickhouse_config_locally', return_value=("http://test-url", "user", "pass"))
     def test_init_with_config_file(self, mock_read_config):
         # Reset the mock before asserting
         self.mock_client.reset_mock()

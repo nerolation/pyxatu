@@ -11,7 +11,9 @@ TABLES = {
     "beaconchain_attestations": "default.canonical_beacon_elaborated_attestation",
     "beaconchain_event_attestations": "default.beacon_api_eth_v1_events_attestation",
     "beaconchain_event_blob_sidecar": "default.beacon_api_eth_v1_events_blob_sidecar",
-    "beaconchain_blob_sidecar": "default.canonical_beacon_blob_sidecar",        
+    "beaconchain_blob_sidecar": "default.canonical_beacon_blob_sidecar",
+    "beaconchain_beacon_committee": "default.beacon_api_eth_v1_beacon_committee",        
+    
 }
 
 GENESIS_TIME_ETH_POS = 1606824023
