@@ -84,7 +84,7 @@ class PyXatu:
                          time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
                          orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
                          store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
-        return self.data_retriever.get_data(
+        res = self.data_retriever.get_data(
             'beaconchain_attestations',
             slot=slot, 
             columns=columns, 
@@ -97,6 +97,11 @@ class PyXatu:
             store_result_in_parquet=store_result_in_parquet,
             custom_data_dir=custom_data_dir
         )
+        if "validators" in res.columns.tolist():
+            res["validators"] = res["validators"].apply(lambda x: eval(x))
+            res = res.explode("validators").reset_index(drop=True)
+        
+        return res
 
     def get_proposer_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", where: Optional[str] = None, 
                       time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
@@ -135,7 +140,7 @@ class PyXatu:
             custom_data_dir=custom_data_dir
         )
         canonical = self.get_slots( 
-            slot=[slots[0]-32, slots[1]+31], 
+            slot=[slots[0]-32, slots[1]+31] if isinstance(slots, list) else None, 
             columns="slot", 
             where=where, 
             time_interval=time_interval, 
@@ -168,10 +173,11 @@ class PyXatu:
             custom_data_dir=custom_data_dir
         )
     
-     def get_missed_or_failed_attestations_of_epoch(self, slot: Optional[int] = None, columns: Optional[str] = "*", where: Optional[str] = None, 
-                  time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
-                  orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
-                  store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+    def get_failed_attestations(self, slot: Optional[int] = None, columns: Optional[str] = "*", 
+                            where: Optional[str] = None, time_interval: Optional[str] = None, 
+                            network: str = "mainnet", max_retries: int = 1, orderby: Optional[str] = None,
+                            final_condition: Optional[str] = None, limit: int = None, 
+                            store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
         proposers = self.get_proposer_of_slot(
             slot=[slot//32, slot//32+32], 
             columns=columns, 
@@ -184,6 +190,7 @@ class PyXatu:
             store_result_in_parquet=store_result_in_parquet,
             custom_data_dir=custom_data_dir
         )
+
     
     def execute_query(self, query: str, columns: Optional[str] = "*") -> Any:
         return self.client.execute_query(query, columns)

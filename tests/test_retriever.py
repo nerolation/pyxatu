@@ -9,7 +9,7 @@ class TestDataRetriever(unittest.TestCase):
     def setUp(self):
         self.client = MagicMock()  # Mock the client
         self.tables = {
-            "valid_data_type": "test_table"
+            "valid_data_table": "test_table"
         }
         self.retriever = DataRetriever(client=self.client, tables=self.tables)
 
@@ -19,16 +19,16 @@ class TestDataRetriever(unittest.TestCase):
         self.client.fetch_data.return_value = mock_result
 
         result = self.retriever.get_data(
-            data_type="valid_data_type",  # Ensure this matches the keys in `tables`
+            data_table="valid_data_table",  # Ensure this matches the keys in `tables`
             slot=1234,
-            columns=["col1", "col2"]
+            columns="col1,col2"
         )
 
         # Use keyword arguments to match the actual call in `get_data`
         self.client.fetch_data.assert_called_once_with(
             table="test_table", 
             slot=1234, 
-            columns=["col1", "col2"], 
+            columns="col1,col2", 
             where=None, 
             time_interval=None, 
             network="mainnet", 
@@ -40,13 +40,13 @@ class TestDataRetriever(unittest.TestCase):
         # Ensure the result is as expected
         pd.testing.assert_frame_equal(result, mock_result)
 
-    def test_get_data_invalid_data_type(self):
-        # Test for invalid data type
+    def test_get_data_invalid_data_table(self):
+        # Test for invalid data table
         with self.assertRaises(ValueError) as context:
-            self.retriever.get_data(data_type="invalid_data_type")
-        
-        self.assertIn("Data type 'invalid_data_type' is not valid", str(context.exception))
+            self.retriever.get_data(data_table="invalid_data_table")
 
+        self.assertIn("Data table 'invalid_data_table' is not valid", str(context.exception))
+        
     @patch('pyxatu.retriever.os.path.exists', return_value=True)
     @patch('pyxatu.retriever.os.path.isdir', return_value=False)
     @patch('pyxatu.retriever.os.mkdir')
