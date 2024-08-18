@@ -13,12 +13,13 @@ from functools import wraps
 from typing import Optional, List, Dict, Any, Callable, TypeVar, Tuple
 
 from pyxatu.utils import CONSTANTS
+from pyxatu.helpers import PyXatuHelpers
 from pyxatu.client import ClickhouseClient
 from pyxatu.retriever import DataRetriever
-
+from pyxatu.relayendpoint import MevBoostCaller
 
 class PyXatu:
-    def __init__(self, config_path: Optional[str] = None, use_env_variables: bool = False, log_level: str = 'INFO') -> None:
+    def __init__(self, config_path: Optional[str] = None, use_env_variables: bool = False, log_level: str = 'INFO', relay: str = None) -> None:
         if not logging.getLogger().hasHandlers():
             logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s - %(levelname)s - %(message)s')
         
@@ -42,6 +43,9 @@ class PyXatu:
             client=self.client,
             tables=CONSTANTS["TABLES"]
         )
+        
+        self.mevboost = MevBoostCaller()
+        self.helpers = PyXatuHelpers()
         
     def read_clickhouse_config_from_env(self) -> Tuple[str, str, str]:
         """Reads Clickhouse configuration from environment variables."""
@@ -123,10 +127,7 @@ class PyXatu:
             store_result_in_parquet=store_result_in_parquet,
             custom_data_dir=custom_data_dir
         )
-        #if "attesting_validator_index" in res.columns.tolist():
-        #    res["attesting_validator_index"] = res["attesting_validator_index"].apply(lambda x: eval(x))
-        #    res = res.explode("attesting_validator_index").reset_index(drop=True)
-        
+       
         return res
 
     def get_proposer_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", where: Optional[str] = None, 
@@ -364,6 +365,20 @@ class PyXatu:
             custom_data_dir=custom_data_dir
         ) 
         return sizes
+    
+    def get_blobs_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", 
+            where: Optional[str] = None, time_interval: Optional[str] = None, 
+            network: str = "mainnet", max_retries: int = 1, orderby: Optional[str] = None,
+            final_condition: Optional[str] = None, limit: int = None, 
+            store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+        pass
+    
+    def get_withdrawals_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", 
+            where: Optional[str] = None, time_interval: Optional[str] = None, 
+            network: str = "mainnet", max_retries: int = 1, orderby: Optional[str] = None,
+            final_condition: Optional[str] = None, limit: int = None, 
+            store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+        pass
     
     def execute_query(self, query: str, columns: Optional[str] = "*", time_interval: Optional[str] = None) -> Any:
         return self.client.execute_query(query, columns)
