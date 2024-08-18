@@ -64,7 +64,7 @@ class ClickhouseClient:
     def _build_query(self, table: str, slot: Optional[int], columns: str, where: Optional[str], 
                      time_interval: Optional[str], network: str, orderby: Optional[str], 
                      final_condition: Optional[str], limit: int = None) -> str:
-        query = f"SELECT DISTINCT {columns} FROM {table}"
+        query = f"SELECT DISTINCT {columns} FROM {table} FINAL"
         
         conditions = []
         

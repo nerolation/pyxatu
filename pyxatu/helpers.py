@@ -10,8 +10,12 @@ class PyXatuHelpers:
         if as_type == "str":
             return slot_datetime.strftime('%Y-%m-%d %H:%M:%S')
         elif as_type == "int":
-            return int(slot_datetime.timestamp())
-            
+            return int(slot_datetime.timestamp())     
 
     def get_time_in_slot(self, slot: int, ts: int) -> int:
-        return ts - self.get_slot_datetime(slot, as_type = "int")*1000
+        return (ts - self.get_slot_datetime(slot = slot, as_type = "int")*1000)/1000
+    
+    def date_string_to_timestamp(self, date_string: str):
+        dt_obj = datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S.%f')
+        utc_timestamp = dt_obj.timestamp()
+        returnutc_timestamp

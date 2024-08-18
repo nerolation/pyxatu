@@ -1,16 +1,17 @@
 import os
 import json
-import requests
-from requests.auth import HTTPBasicAuth
-import pandas as pd
-from io import StringIO
 import time
-from tqdm.auto import tqdm
-from pathlib import Path
 import shutil
 import logging
 from functools import wraps
+from pathlib import Path
 from typing import Optional, List, Dict, Any, Callable, TypeVar, Tuple
+from io import StringIO
+
+import requests
+from requests.auth import HTTPBasicAuth
+import pandas as pd
+from tqdm.auto import tqdm
 
 from pyxatu.utils import CONSTANTS
 from pyxatu.helpers import PyXatuHelpers
@@ -72,7 +73,7 @@ class PyXatu:
 
     def get_blockevent_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", where: Optional[str] = None, 
                        time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
-                       orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
+                       groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
                        store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
         return self.data_retriever.get_data(
             'beacon_api_eth_v1_events_block',
@@ -81,6 +82,7 @@ class PyXatu:
             where=where, 
             time_interval=time_interval, 
             network=network, 
+            groupby=groupby,
             orderby=orderby,
             final_condition=final_condition,
             limit=limit,
@@ -90,7 +92,7 @@ class PyXatu:
     
     def get_attestation_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", where: Optional[str] = None, 
                          time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
-                         orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
+                         groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
                          store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
         res = self.data_retriever.get_data(
             'canonical_beacon_elaborated_attestation',
@@ -99,6 +101,7 @@ class PyXatu:
             where=where, 
             time_interval=time_interval, 
             network=network, 
+            groupby=groupby,
             orderby=orderby,
             final_condition=final_condition,
             limit=limit,
@@ -114,7 +117,7 @@ class PyXatu:
     def get_attestation_event_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", 
                          where: Optional[str] = None, 
                          time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
-                         orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
+                         groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
                          store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
         
         res = self.data_retriever.get_data(
@@ -124,6 +127,7 @@ class PyXatu:
             where=where, 
             time_interval=time_interval, 
             network=network, 
+            groupby=groupby,
             orderby=orderby,
             final_condition=final_condition,
             limit=limit,
@@ -135,7 +139,7 @@ class PyXatu:
 
     def get_proposer_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", where: Optional[str] = None, 
                       time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
-                      orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
+                      groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
                       store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
         return self.data_retriever.get_data(
             'canonical_beacon_proposer_duty',
@@ -144,6 +148,7 @@ class PyXatu:
             where=where, 
             time_interval=time_interval, 
             network=network, 
+            groupby=groupby,
             orderby=orderby,
             final_condition=final_condition,
             limit=limit,
@@ -153,7 +158,7 @@ class PyXatu:
     
     def get_reorgs_in_slots(self, slots: List[int] = None, where: Optional[str] = None, 
                    time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
-                   orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
+                   groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
                    store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
        
         potential_reorgs = self.data_retriever.get_data(
@@ -163,6 +168,7 @@ class PyXatu:
             where=where, 
             time_interval=time_interval, 
             network=network, 
+            groupby=groupby,
             orderby=orderby,
             final_condition=final_condition,
             limit=limit,
@@ -175,6 +181,7 @@ class PyXatu:
             where=where, 
             time_interval=time_interval, 
             network=network, 
+            groupby=groupby,
             orderby=orderby,
             final_condition=final_condition,
             limit=limit,
@@ -186,7 +193,7 @@ class PyXatu:
     
     def get_slots(self, slot: List[int] = None, columns: Optional[str] = "*", where: Optional[str] = None, 
                   time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
-                  orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
+                  groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
                   store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
         return self.data_retriever.get_data(
             'canonical_beacon_block',
@@ -195,6 +202,7 @@ class PyXatu:
             where=where, 
             time_interval=time_interval,
             network=network, 
+            groupby=groupby,
             orderby=orderby,
             final_condition=final_condition,
             limit=limit,
@@ -204,15 +212,16 @@ class PyXatu:
     
     def get_missed_slots(self, slots: List[int] = None, columns: Optional[str] = "*", 
                             where: Optional[str] = None, time_interval: Optional[str] = None, 
-                            network: str = "mainnet", max_retries: int = 1, orderby: Optional[str] = None,
+                            network: str = "mainnet", max_retries: int = 1, groupby: str = None, orderby: Optional[str] = None,
                             final_condition: Optional[str] = None, limit: int = None, 
                             store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
         canonical = self.get_slots( 
-            slot=[slots[0], slots[-1]] if isinstance(slots, list) else None, 
+            slot=[slots[0], slots[-1]] if isinstance(slots, list) else slots, 
             columns="slot", 
             where=where, 
             time_interval=time_interval, 
             network=network, 
+            groupby=groupby,
             orderby=orderby,
             final_condition=final_condition,
             limit=limit,
@@ -224,7 +233,7 @@ class PyXatu:
     
     def get_duties_for_slots(self, slot: Optional[int] = None, columns: Optional[str] = "*", 
                             where: Optional[str] = None, time_interval: Optional[str] = None, 
-                            network: str = "mainnet", max_retries: int = 1, orderby: Optional[str] = None,
+                            network: str = "mainnet", max_retries: int = 1, groupby: str = None, orderby: Optional[str] = None,
                             final_condition: Optional[str] = None, limit: int = None, 
                             store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
         committee = self.data_retriever.get_data(
@@ -234,6 +243,7 @@ class PyXatu:
             where=where, 
             time_interval=time_interval, 
             network=network, 
+            groupby=groupby,
             orderby=orderby,
             final_condition=final_condition,
             limit=limit,
@@ -281,9 +291,8 @@ class PyXatu:
     def get_elaborated_attestations(self, epoch: Optional[int] = None, what: str = "source,target,head", 
                                     columns: Optional[str] = "*", where: Optional[str] = None, 
                                     time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
-                                    orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None, 
-                                    store_result_in_parquet: bool = None, custom_data_dir: str = None, 
-                                    only_status="correct,failed,offline") -> Any:
+                                    groupby: str = None, orderby: Optional[str] = None, store_result_in_parquet: bool = None, 
+                                    custom_data_dir: str = None, only_status="correct,failed,offline") -> Any:
 
         if not isinstance(epoch, list):
             epoch = [epoch, epoch + 1]
@@ -294,6 +303,7 @@ class PyXatu:
             where=where, 
             time_interval=time_interval, 
             network=network, 
+            groupby=groupby,
             orderby="slot",
             final_condition=final_condition,
             limit=limit,
@@ -307,6 +317,7 @@ class PyXatu:
             where=where, 
             time_interval=time_interval, 
             network=network, 
+            groupby=groupby,
             orderby=orderby,
             final_condition=final_condition,
             limit=limit,
@@ -350,27 +361,56 @@ class PyXatu:
 
         return final_df
     
-    def get_block_size(slot: List[int], columns: Optional[str] = "*", where: Optional[str] = None, 
-                time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
-                orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None, 
-                store_result_in_parquet: bool = None, custom_data_dir: str = None, ):
-        sizes = self.get_slots( 
-            slot=[slots[0], slots[-1]] if isinstance(slots, list) else slot, 
-            columns="slot, execution_payload_transactions_count, execution_payload_transactions_total_bytes, execution_payload_transactions_total_bytes_compressed", 
+    def get_beacon_block_v2(self, slots: List[int] = None, columns: Optional[str] = "*", 
+                where: Optional[str] = None, time_interval: Optional[str] = None, 
+                network: str = "mainnet", max_retries: int = 1, groupby: str = None, orderby: Optional[str] = None,
+                final_condition: Optional[str] = None, limit: int = None, 
+                store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+        block = self.data_retriever.get_data(
+            'beacon_api_eth_v2_beacon_block',
+            slot=slots, 
+            columns=columns,
             where=where, 
             time_interval=time_interval, 
             network=network, 
+            groupby=groupby,
             orderby=orderby,
             final_condition=final_condition,
             limit=limit,
             store_result_in_parquet=store_result_in_parquet,
             custom_data_dir=custom_data_dir
+        )
+        return block
+
+    def get_block_size(self, slots: List[int], columns: Optional[str] = "*", where: Optional[str] = None, 
+                time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
+                groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None, 
+                store_result_in_parquet: bool = None, custom_data_dir: str = None):
+        if isinstance(slots, int):
+            slots = [slots, slots+1]
+        if where == None:
+            where = []
+        sizes = self.get_beacon_block_v2( 
+            slots=[slots[0], slots[-1]] if isinstance(slots, list) else slots, 
+            columns=columns, 
+            where=" AND ".join(where + ["meta_client_geo_country = 'Finland'", "meta_client_name = 'utility-xatu-cannon'"]), 
+            time_interval=time_interval, 
+            network=network, 
+            orderby="slot",
+            groupby=groupby,
+            final_condition=final_condition,
+            limit=limit,
+            store_result_in_parquet=store_result_in_parquet,
+            custom_data_dir=custom_data_dir
         ) 
+        if "execution_payload_blob_gas_used" in sizes.columns:
+            sizes["blobs"] = sizes["execution_payload_blob_gas_used"] // 131072
+            sizes.drop("execution_payload_blob_gas_used", axis=1, inplace=True)
         return sizes
     
     def get_blob_events_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", 
             where: Optional[str] = None, time_interval: Optional[str] = None, 
-            network: str = "mainnet", max_retries: int = 1, orderby: Optional[str] = None,
+            network: str = "mainnet", max_retries: int = 1, groupby: str = None, orderby: Optional[str] = None,
             final_condition: Optional[str] = None, limit: int = None, 
             store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
         return self.data_retriever.get_data(
@@ -380,6 +420,7 @@ class PyXatu:
             where=where, 
             time_interval=time_interval,
             network=network, 
+            groupby=groupby,
             orderby=orderby,
             final_condition=final_condition,
             limit=limit,
@@ -389,7 +430,7 @@ class PyXatu:
     
     def get_blobs_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", 
             where: Optional[str] = None, time_interval: Optional[str] = None, 
-            network: str = "mainnet", max_retries: int = 1, orderby: Optional[str] = None,
+            network: str = "mainnet", max_retries: int = 1, groupby: str = None, orderby: Optional[str] = None,
             final_condition: Optional[str] = None, limit: int = None, 
             store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
         return self.data_retriever.get_data(
@@ -399,6 +440,7 @@ class PyXatu:
             where=where, 
             time_interval=time_interval,
             network=network, 
+            groupby=groupby,
             orderby=orderby,
             final_condition=final_condition,
             limit=limit,
@@ -408,7 +450,7 @@ class PyXatu:
     
     def get_withdrawals_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", 
             where: Optional[str] = None, time_interval: Optional[str] = None, 
-            network: str = "mainnet", max_retries: int = 1, orderby: Optional[str] = None,
+            network: str = "mainnet", max_retries: int = 1, groupby: str = None, orderby: Optional[str] = None,
             final_condition: Optional[str] = None, limit: int = None, 
             store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
         return self.data_retriever.get_data(
@@ -418,6 +460,7 @@ class PyXatu:
             where=where, 
             time_interval=time_interval,
             network=network, 
+            groupby=groupby,
             orderby=orderby,
             final_condition=final_condition,
             limit=limit,

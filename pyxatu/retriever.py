@@ -10,7 +10,7 @@ class DataRetriever:
 
     def get_data(self, data_table: str, slot: Optional[int] = None, columns: str = "*", 
                  where: Optional[str] = None, time_interval: Optional[str] = None, network: str = "mainnet", 
-                 orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
+                 groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
                  store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
         if columns != "*" and isinstance(columns, list):
             columns = ",".join(columns)
