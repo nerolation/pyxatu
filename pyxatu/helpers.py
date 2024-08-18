@@ -14,4 +14,4 @@ class PyXatuHelpers:
             
 
     def get_time_in_slot(self, slot: int, ts: int) -> int:
-        return ts - get_slot_datetime(slot, as_type = "int")
+        return ts - self.get_slot_datetime(slot, as_type = "int")*1000
