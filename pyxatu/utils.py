@@ -4,15 +4,15 @@ from functools import wraps
 from typing import Any, Callable, TypeVar
 
 TABLES = {
-    "beaconchain_event_block": "default.beacon_api_eth_v1_events_block",
-    "beaconchain_proposer": "default.canonical_beacon_proposer_duty",
-    "beaconchain_reorgs": "default.beacon_api_eth_v1_events_chain_reorg",
-    "beaconchain_canonical": "default.canonical_beacon_block",
-    "beaconchain_attestations": "default.canonical_beacon_elaborated_attestation",
-    "beaconchain_event_attestations": "default.beacon_api_eth_v1_events_attestation",
+    "beacon_api_eth_v1_events_block": "default.beacon_api_eth_v1_events_block",
+    "canonical_beacon_proposer_duty": "default.canonical_beacon_proposer_duty",
+    "beacon_api_eth_v1_events_chain_reorg": "default.beacon_api_eth_v1_events_chain_reorg",
+    "canonical_beacon_block": "default.canonical_beacon_block",
+    "canonical_beacon_elaborated_attestation": "default.canonical_beacon_elaborated_attestation",
+    "beacon_api_eth_v1_events_attestation": "default.beacon_api_eth_v1_events_attestation",
     "beaconchain_event_blob_sidecar": "default.beacon_api_eth_v1_events_blob_sidecar",
     "beaconchain_blob_sidecar": "default.canonical_beacon_blob_sidecar",
-    "beaconchain_beacon_committee": "default.beacon_api_eth_v1_beacon_committee",        
+    "beacon_api_eth_v1_beacon_committee": "default.beacon_api_eth_v1_beacon_committee",        
     
 }
 

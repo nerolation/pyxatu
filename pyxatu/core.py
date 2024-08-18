@@ -68,7 +68,7 @@ class PyXatu:
                        orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
                        store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
         return self.data_retriever.get_data(
-            'beaconchain_event_block',
+            'beacon_api_eth_v1_events_block',
             slot=slot, 
             columns=columns, 
             where=where, 
@@ -86,7 +86,7 @@ class PyXatu:
                          orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
                          store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
         res = self.data_retriever.get_data(
-            'beaconchain_attestations',
+            'canonical_beacon_elaborated_attestation',
             slot=slot, 
             columns=columns, 
             where=where, 
@@ -111,7 +111,7 @@ class PyXatu:
                          store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
         
         res = self.data_retriever.get_data(
-            'beaconchain_event_attestations',
+            'beacon_api_eth_v1_events_attestation',
             slot=slot, 
             columns=columns, 
             where=where, 
@@ -134,7 +134,7 @@ class PyXatu:
                       orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
                       store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
         return self.data_retriever.get_data(
-            'beaconchain_proposer',
+            'canonical_beacon_proposer_duty',
             slot=slot, 
             columns=columns, 
             where=where, 
@@ -153,7 +153,7 @@ class PyXatu:
                    store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
        
         potential_reorgs = self.data_retriever.get_data(
-            'beaconchain_reorgs',
+            'beacon_api_eth_v1_events_chain_reorg',
             slot=slots, 
             columns="slot-depth", 
             where=where, 
@@ -185,7 +185,7 @@ class PyXatu:
                   orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
                   store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
         return self.data_retriever.get_data(
-            'beaconchain_canonical',
+            'canonical_beacon_block',
             slot=slot, 
             columns=columns, 
             where=where, 
@@ -224,7 +224,7 @@ class PyXatu:
                             final_condition: Optional[str] = None, limit: int = None, 
                             store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
         committee = self.data_retriever.get_data(
-            'beaconchain_beacon_committee',
+            'beacon_api_eth_v1_beacon_committee',
             slot=slot, 
             columns=columns, 
             where=where, 
