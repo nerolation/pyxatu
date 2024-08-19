@@ -46,8 +46,8 @@ class ClickhouseClient:
         return df
 
     def fetch_data(self, table: str, slot: Optional[int] = None, columns: str = '*', where: Optional[str] = None,
-                   time_interval: Optional[str] = None, network: str = "mainnet", orderby: Optional[str] = None,
-                   final_condition: Optional[str] = None, limit: int = None) -> pd.DataFrame:
+                   time_interval: Optional[str] = None, network: str = "mainnet", groupby: Optional[str] = None,
+                   orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None) -> pd.DataFrame:
         query = self._build_query(
             table = table, 
             slot = slot, 
@@ -55,6 +55,7 @@ class ClickhouseClient:
             where = where, 
             time_interval = time_interval, 
             network = network, 
+            groupby = groupby, 
             orderby = orderby, 
             final_condition = final_condition,
             limit = limit
@@ -62,7 +63,7 @@ class ClickhouseClient:
         return self.execute_query(query, columns)
 
     def _build_query(self, table: str, slot: Optional[int], columns: str, where: Optional[str], 
-                     time_interval: Optional[str], network: str, orderby: Optional[str], 
+                     time_interval: Optional[str], network: str,  groupby: Optional[str], orderby: Optional[str], 
                      final_condition: Optional[str], limit: int = None) -> str:
         query = f"SELECT DISTINCT {columns} FROM {table} FINAL"
         
@@ -84,6 +85,7 @@ class ClickhouseClient:
         
         query += f" WHERE {' AND '.join(filter(None, conditions))}"
         
+        if groupby: query += f" GROUP BY {groupby}"
         if orderby: query += f" ORDER BY {orderby}"
             
         if limit: query += f" LIMIT {limit}"
@@ -117,4 +119,4 @@ class ClickhouseClient:
             return f"slot_start_date_time >= '{lower_slot_date_str}' AND slot_start_date_time < '{upper_slot_date_str}'"
 
         else:
-            raise ValueError("Invalid input: either a valid integer slot or a list of exactly two slots must be provided.")
+            raise ValueError(f"Invalid input: either a valid integer slot or a list of exactly two slots must be provided. Provided input type: {type(slot)}, Slot variable contains: {str(slot)}")

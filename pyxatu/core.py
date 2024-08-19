@@ -194,8 +194,9 @@ class PyXatu:
     def get_slots(self, slot: List[int] = None, columns: Optional[str] = "*", where: Optional[str] = None, 
                   time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
                   groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
-                  store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
-        return self.data_retriever.get_data(
+                  store_result_in_parquet: bool = None, custom_data_dir: str = None, add_missed: bool = True) -> Any:
+        
+        df = self.data_retriever.get_data(
             'canonical_beacon_block',
             slot=slot, 
             columns=columns, 
@@ -209,25 +210,50 @@ class PyXatu:
             store_result_in_parquet=store_result_in_parquet,
             custom_data_dir=custom_data_dir
         )
+        
+        if add_missed:
+            missed = self.get_missed_slots(canonical=df)
+            missed_df = pd.DataFrame(missed, columns=['slot'])
+
+            _d = 999999999
+            for col, dtype in df.dtypes.items():
+                if col != 'slot':  
+                    if pd.api.types.is_numeric_dtype(dtype):
+                        missed_df[col] = default_filler if "index" in col else 0
+                    else:
+                        missed_df[col] = "missed"
+
+            df = pd.concat([df, missed_df], ignore_index=True)
+            if "proposer_index" in df.columns:
+                _c = "proposer_validator_index"
+                _c1 = "proposer_index"
+                _p = self.get_proposer_of_slot(slot=[int(df.slot.min()), int(df.slot.max()+1)], columns=f"slot,{_c}")
+                df[_c1] = df.apply(lambda x: _p[_p["slot"] == x["slot"]][_c].values[0] if x[_c1] == _d else x[_c1], axis=1)
+            if orderby and "," not in orderby:
+                df.sort_values(orderby, inplace=True)
+        return df
     
     def get_missed_slots(self, slots: List[int] = None, columns: Optional[str] = "*", 
-                            where: Optional[str] = None, time_interval: Optional[str] = None, 
-                            network: str = "mainnet", max_retries: int = 1, groupby: str = None, orderby: Optional[str] = None,
-                            final_condition: Optional[str] = None, limit: int = None, 
-                            store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
-        canonical = self.get_slots( 
-            slot=[slots[0], slots[-1]] if isinstance(slots, list) else slots, 
-            columns="slot", 
-            where=where, 
-            time_interval=time_interval, 
-            network=network, 
-            groupby=groupby,
-            orderby=orderby,
-            final_condition=final_condition,
-            limit=limit,
-            store_result_in_parquet=store_result_in_parquet,
-            custom_data_dir=custom_data_dir
-        )      
+            where: Optional[str] = None, time_interval: Optional[str] = None, 
+            network: str = "mainnet", max_retries: int = 1, groupby: str = None, orderby: Optional[str] = None,
+            final_condition: Optional[str] = None, limit: int = None, 
+            store_result_in_parquet: bool = None, custom_data_dir: str = None, 
+            canonical: Optional = None
+        ) -> Any:
+        if canonical is None:
+            canonical = self.get_slots( 
+                slot=[slots[0], slots[-1]] if isinstance(slots, list) else slots, 
+                columns="slot", 
+                where=where, 
+                time_interval=time_interval, 
+                network=network, 
+                groupby=groupby,
+                orderby=orderby,
+                final_condition=final_condition,
+                limit=limit,
+                store_result_in_parquet=store_result_in_parquet,
+                custom_data_dir=custom_data_dir
+            )      
         missed = set(range(canonical.slot.min(), canonical.slot.max()+1)) - set(canonical.slot.unique().tolist())
         return missed
     
@@ -388,12 +414,12 @@ class PyXatu:
                 store_result_in_parquet: bool = None, custom_data_dir: str = None):
         if isinstance(slots, int):
             slots = [slots, slots+1]
-        if where == None:
-            where = []
-        sizes = self.get_beacon_block_v2( 
-            slots=[slots[0], slots[-1]] if isinstance(slots, list) else slots, 
-            columns=columns, 
-            where=" AND ".join(where + ["meta_client_geo_country = 'Finland'", "meta_client_name = 'utility-xatu-cannon'"]), 
+        if columns == None:
+            columns = []
+        sizes = self.get_slots( 
+            slot=[slots[0], slots[-1]] if isinstance(slots, list) else slots, 
+            columns= ",".join(list(dict.fromkeys(columns.split(",") + ["block_total_bytes_compressed", "block_total_bytes"]))),
+            where=where, #" AND ".join(where + ["meta_client_geo_country = 'Finland'", "meta_client_name = 'utility-xatu-cannon'"]), 
             time_interval=time_interval, 
             network=network, 
             orderby="slot",

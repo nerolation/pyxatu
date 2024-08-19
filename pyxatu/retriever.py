@@ -26,6 +26,7 @@ class DataRetriever:
             where=where, 
             time_interval=time_interval, 
             network=network, 
+            groupby=groupby, 
             orderby=orderby, 
             final_condition=final_condition,
             limit=limit
