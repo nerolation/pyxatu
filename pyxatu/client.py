@@ -27,27 +27,39 @@ class ClickhouseClient:
         )
         response.raise_for_status()
         if "DISTINCT" in query.upper():
-            potentials_columns = query.split("FROM")[0].split("DISTINCT")[1].strip()
+            potential_columns = query.split("FROM")[0].split("DISTINCT")[1].strip()
         else:
-            potentials_columns = query.split("FROM")[0].split("SELECT")[1].strip()
+            potential_columns = query.split("FROM")[0].split("SELECT")[1].strip()
+        print("potential_columns: ", potential_columns)
+        if potential_columns != "*" and "," in potential_columns:
+            potential_columns = ",".join([i.split("as ")[-1].strip() if "as " in i else i.strip() for i in potential_columns.split(",")])
+        elif potential_columns != "*":
+            potential_columns = [i.split("as ")[-1].strip() if "as " in i else i.strip() for i in [potential_columns]] 
+        print("potential_columns: ", potential_columns)
+        return self._parse_response(response.text, columns, potential_columns)
 
-        return self._parse_response(response.text, columns, potentials_columns)
-
-    def _parse_response(self, response_text: str, columns: Optional[str] = "*", potentials_columns: Optional[str] = None) -> pd.DataFrame:
+    def _parse_response(self, response_text: str, columns: Optional[str] = "*", potential_columns: Optional[str] = None) -> pd.DataFrame:
         """Converts response text to a Pandas DataFrame and assigns column names if provided."""
         df = pd.read_csv(StringIO(response_text), sep='\t', header=None)
+        print("df: ", df)
         if columns and columns != "*":
+            print("columns: ", columns)
+            
             df.columns = [col.strip() for col in columns.split(',')]
+            print("df.columns: ", df.columns)
 
-        elif potentials_columns and potentials_columns != "*":
+        elif potential_columns and potential_columns != "*":
 
-            df.columns = [col.strip() for col in potentials_columns.split(",")]
+            print("potential_columns: ", potential_columns)
+            df.columns = [col.strip() for col in potential_columns.split(",")]
+            print("df.columns: ", df.columns)
             
         return df
 
     def fetch_data(self, table: str, slot: Optional[int] = None, columns: str = '*', where: Optional[str] = None,
                    time_interval: Optional[str] = None, network: str = "mainnet", groupby: Optional[str] = None,
-                   orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None) -> pd.DataFrame:
+                   orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
+                   add_final_keyword_to_query: bool = True) -> pd.DataFrame:
         query = self._build_query(
             table = table, 
             slot = slot, 
@@ -58,15 +70,17 @@ class ClickhouseClient:
             groupby = groupby, 
             orderby = orderby, 
             final_condition = final_condition,
-            limit = limit
+            limit = limit,
+            add_final_keyword_to_query=add_final_keyword_to_query
         )
         return self.execute_query(query, columns)
 
     def _build_query(self, table: str, slot: Optional[int], columns: str, where: Optional[str], 
                      time_interval: Optional[str], network: str,  groupby: Optional[str], orderby: Optional[str], 
-                     final_condition: Optional[str], limit: int = None) -> str:
-        query = f"SELECT DISTINCT {columns} FROM {table} FINAL"
-        
+                     final_condition: Optional[str], limit: int = None, add_final_keyword_to_query: bool = True) -> str:
+        query = f"SELECT DISTINCT {columns} FROM {table}"
+        if add_final_keyword_to_query:
+            query += " FINAL"
         conditions = []
         
         if isinstance(slot, int):

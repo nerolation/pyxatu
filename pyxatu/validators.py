@@ -9,7 +9,9 @@ class ValidatorGadget:
     
     def _download_validator_mapping(self):
         df = pd.read_parquet("https://storage.googleapis.com/public_eth_data/openethdata/validator_data.parquet.gzip")
-        df["validator_id"] = df["validator_id"].astype(int)  
+        df["validator_id"] = df["validator_id"].astype(int)
+        df["lido_node_operator"] = df["lido_node_operator"].apply(lambda x: x.lower())
+        df["label"] = df["label"].apply(lambda x: x.lower())
         df.to_parquet("validator_mapping.parquet", index=False)
         logging.info("Validator mapping downloaded and stored to `./validator_mapping.parquet`")
     

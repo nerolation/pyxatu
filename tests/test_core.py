@@ -76,6 +76,7 @@ class TestPyXatu(unittest.TestCase):
             where=None,
             time_interval=None,
             network="mainnet",
+            groupby=None,
             orderby=None,
             final_condition=None,
             limit=None,

@@ -108,17 +108,18 @@ class PyXatu:
             store_result_in_parquet=store_result_in_parquet,
             custom_data_dir=custom_data_dir
         )
-        if "validators" in res.columns.tolist():
+        if "validators" in res.columns:
             res["validators"] = res["validators"].apply(lambda x: eval(x))
             res = res.explode("validators").reset_index(drop=True)
         
         return res
     
     def get_attestation_event_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", 
-                         where: Optional[str] = None, 
-                         time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
-                         groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
-                         store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+                where: Optional[str] = None, time_interval: Optional[str] = None, network: str = "mainnet", 
+                max_retries: int = 1, groupby: str = None, orderby: Optional[str] = None, 
+                final_condition: Optional[str] = None, limit: int = None, 
+                store_result_in_parquet: bool = None, custom_data_dir: str = None,
+                add_final_keyword_to_query: bool = False) -> Any:
         
         res = self.data_retriever.get_data(
             'beacon_api_eth_v1_events_attestation',
@@ -132,9 +133,10 @@ class PyXatu:
             final_condition=final_condition,
             limit=limit,
             store_result_in_parquet=store_result_in_parquet,
-            custom_data_dir=custom_data_dir
+            custom_data_dir=custom_data_dir,
+            add_final_keyword_to_query=add_final_keyword_to_query
         )
-       
+        print(res)
         return res
 
     def get_proposer_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", where: Optional[str] = None, 
@@ -186,7 +188,8 @@ class PyXatu:
             final_condition=final_condition,
             limit=limit,
             store_result_in_parquet=False,
-            custom_data_dir=None
+            custom_data_dir=None,
+            canonical=None
         )
         reorgs = sorted(set(potential_reorgs["slot-depth"].tolist()).intersection(missed))
         return reorgs
@@ -219,7 +222,7 @@ class PyXatu:
             for col, dtype in df.dtypes.items():
                 if col != 'slot':  
                     if pd.api.types.is_numeric_dtype(dtype):
-                        missed_df[col] = default_filler if "index" in col else 0
+                        missed_df[col] = _d if "index" in col else 0
                     else:
                         missed_df[col] = "missed"
 
@@ -252,7 +255,8 @@ class PyXatu:
                 final_condition=final_condition,
                 limit=limit,
                 store_result_in_parquet=store_result_in_parquet,
-                custom_data_dir=custom_data_dir
+                custom_data_dir=custom_data_dir,
+                add_missed=False
             )      
         missed = set(range(canonical.slot.min(), canonical.slot.max()+1)) - set(canonical.slot.unique().tolist())
         return missed
@@ -288,7 +292,12 @@ class PyXatu:
     def get_checkpoints_for_slot(self, slot: int):
         epoch_start_slot = int(slot // 32 * 32)
         last_epoch_start_slot = int(epoch_start_slot - 32)
-        slots = self.get_slots(slot=[last_epoch_start_slot - 32, epoch_start_slot + 32], columns="slot,block_root", orderby="slot")
+        slots = self.get_slots(
+            slot=[last_epoch_start_slot - 32, epoch_start_slot + 32], 
+            columns="slot,block_root", 
+            orderby="slot",
+            add_missed=False
+        )
         head, target, source = [None]*3
         
         _slot = slot
@@ -317,7 +326,8 @@ class PyXatu:
     def get_elaborated_attestations(self, epoch: Optional[int] = None, what: str = "source,target,head", 
                                     columns: Optional[str] = "*", where: Optional[str] = None, 
                                     time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
-                                    groupby: str = None, orderby: Optional[str] = None, store_result_in_parquet: bool = None, 
+                                    groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None,
+                                    limit: int = None, store_result_in_parquet: bool = None, 
                                     custom_data_dir: str = None, only_status="correct,failed,offline") -> Any:
 
         if not isinstance(epoch, list):
@@ -411,7 +421,7 @@ class PyXatu:
     def get_block_size(self, slots: List[int], columns: Optional[str] = "*", where: Optional[str] = None, 
                 time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
                 groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None, 
-                store_result_in_parquet: bool = None, custom_data_dir: str = None):
+                store_result_in_parquet: bool = None, custom_data_dir: str = None, add_missed: bool = True):
         if isinstance(slots, int):
             slots = [slots, slots+1]
         if columns == None:
@@ -427,7 +437,8 @@ class PyXatu:
             final_condition=final_condition,
             limit=limit,
             store_result_in_parquet=store_result_in_parquet,
-            custom_data_dir=custom_data_dir
+            custom_data_dir=custom_data_dir,
+            add_missed=add_missed
         ) 
         if "execution_payload_blob_gas_used" in sizes.columns:
             sizes["blobs"] = sizes["execution_payload_blob_gas_used"] // 131072

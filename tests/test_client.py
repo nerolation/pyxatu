@@ -90,7 +90,6 @@ class TestClickhouseClient(unittest.TestCase):
         expected_query = "SELECT DISTINCT slot, slot_start_date_time FROM default.canonical_beacon_block WHERE slot = 9700000 AND slot_start_date_time = '2024-08-09 17:20:23'"
 
         result = self.client.execute_query(expected_query)
-        print("result", result)
         mock_get.assert_called_once_with(
             self.client.url,
             params={'query': expected_query},
@@ -100,7 +99,6 @@ class TestClickhouseClient(unittest.TestCase):
 
         # Verify the result as expected
         expected_df = pd.DataFrame([[9700000, '2024-08-09 17:20:23']], columns=["slot", "slot_start_date_time"])
-        print("expected_df", expected_df)
         
         pd.testing.assert_frame_equal(result, expected_df)
 

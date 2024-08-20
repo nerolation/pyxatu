@@ -11,7 +11,8 @@ class DataRetriever:
     def get_data(self, data_table: str, slot: Optional[int] = None, columns: str = "*", 
                  where: Optional[str] = None, time_interval: Optional[str] = None, network: str = "mainnet", 
                  groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
-                 store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+                 store_result_in_parquet: bool = None, custom_data_dir: str = None,
+                 add_final_keyword_to_query: bool = True) -> Any:
         if columns != "*" and isinstance(columns, list):
             columns = ",".join(columns)
         table = self.tables.get(data_table)
@@ -29,7 +30,8 @@ class DataRetriever:
             groupby=groupby, 
             orderby=orderby, 
             final_condition=final_condition,
-            limit=limit
+            limit=limit,
+            add_final_keyword_to_query=add_final_keyword_to_query
         )
         if store_result_in_parquet:
             self.store_result_to_disk(result, custom_data_dir)
