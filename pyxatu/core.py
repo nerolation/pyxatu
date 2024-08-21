@@ -262,6 +262,8 @@ class PyXatu:
                         missed_df[col] = "missed"
 
             df = pd.concat([df, missed_df], ignore_index=True)
+            
+            # Add proposer_index for slots that were missed
             if "proposer_index" in df.columns:
                 _c = "proposer_validator_index"
                 _c1 = "proposer_index"
@@ -301,10 +303,13 @@ class PyXatu:
                             network: str = "mainnet", max_retries: int = 1, groupby: str = None, orderby: Optional[str] = None,
                             final_condition: Optional[str] = None, limit: int = None, 
                             store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+        required_columns = ["slot", "validators"]
         committee = self._get_data(
             data_table='beacon_api_eth_v1_beacon_committee',
             slot=slot, 
-            columns=columns, 
+            columns=",".join(list(dict.fromkeys(
+                    [i.strip() for i in columns.split(",")] + required_columns 
+            ))), 
             where=where, 
             time_interval=time_interval, 
             network=network, 
@@ -367,20 +372,7 @@ class PyXatu:
 
         if not isinstance(slot, list):
             slot = [slot, slot + 1]
-
-        duties = self.get_duties_for_slots(
-            slot=[int(slot[0]//32 * 32), int(slot[-1]//32 * 32 + 32)], 
-            columns="slot, validators", 
-            where=where, 
-            time_interval=time_interval, 
-            network=network, 
-            groupby=groupby,
-            orderby="slot",
-            final_condition=final_condition,
-            limit=limit,
-            store_result_in_parquet=store_result_in_parquet,
-            custom_data_dir=custom_data_dir
-        )
+            
         required_columns = ["source_root", "target_root", "validators", "beacon_block_root"]
         attestations = self.get_attestation_of_slot(
             slot=[slot[0]//32 * 32, slot[-1]//32 * 32 + 32], 
@@ -399,6 +391,20 @@ class PyXatu:
             store_result_in_parquet=store_result_in_parquet,
             custom_data_dir=custom_data_dir
         )
+
+        duties = self.get_duties_for_slots(
+            slot=[int(slot[0]//32 * 32), int(slot[-1]//32 * 32 + 32)], 
+            columns="slot, validators", 
+            where=where, 
+            time_interval=time_interval, 
+            network=network, 
+            groupby=groupby,
+            orderby="slot",
+            final_condition=final_condition,
+            limit=limit,
+            store_result_in_parquet=store_result_in_parquet,
+            custom_data_dir=custom_data_dir
+        ) 
 
         # Initialize empty list to store all status data
         status_data = []
@@ -579,12 +585,14 @@ class PyXatu:
     def execute_query(self, query: str, columns: Optional[str] = "*", time_interval: Optional[str] = None) -> Any:
         return self.client.execute_query(query, columns)
     
-    def get_docs(self, table_name: str = None):
+    def get_docs(self, table_name: str = None, print_loading: bool = True):
         """
         Retrieves table information, such as available columns, from the DocsScraper.
         """
         if table_name in self.method_table_mapping.keys():
             table_name = self.method_table_mapping[table_name]
+        if print_loading:
+            print(f"Retrieving schema for table {table_name}")
         return self.docs.get_table_info(table_name)
     
     def create_method_table_mapping(self):
@@ -604,41 +612,73 @@ class PyXatu:
             
             # Extract the table name from the source code
             table_name = self.extract_table_name_from_source(dedented_source)
-            
             if table_name:
                 method_table_mapping[method_name] = table_name
 
         return method_table_mapping
     
-    def extract_table_name_from_source(self, source: str) -> Optional[str]:
+    def extract_table_name_from_source(self, source: str, current_func_name: str = None, depth: int = 0, max_depth: int = 5) -> Optional[str]:
         """
         Extracts the table name from the method's source code by looking for
-        the call to self._get_data().
+        the first argument or keyword argument `data_table` in the call to 
+        self._get_data() or self.get_data(), with recursion to resolve nested calls.
+
+        Recurses up to `max_depth` times when encountering function calls.
         """
         try:
+            # Check if we've exceeded the maximum recursion depth
+            if depth > max_depth:
+                return None
+
             # Parse the source code into an abstract syntax tree (AST)
             tree = ast.parse(source)
 
             # Iterate over all nodes in the AST
             for node in ast.walk(tree):
-                # Look for calls to self._get_data()
+                # Look for calls to self._get_data() or self.get_data()
                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-                    if node.func.attr == 'get_data' and isinstance(node.func.value, ast.Attribute):
-                        if node.func.value.attr == 'data_retriever':
-                            # The first argument of get_data is the table name
-                            if node.args and isinstance(node.args[0], ast.Constant):
-                                return node.args[0].value
+
+                    if node.func.attr in ['get_data', '_get_data']:
+                        # Check if the table name is passed as a keyword argument
+                        for keyword in node.keywords:
+                            if keyword.arg == 'data_table':
+                                if isinstance(keyword.value, ast.Constant):
+                                    table_name = keyword.value.value
+                                    return table_name
+                            
+                        # Handle positional arguments
+                        if node.args and len(node.args) > 0:
+                            first_arg = node.args[0]
+
+                            if isinstance(first_arg, ast.Constant):
+                                table_name = first_arg.value
+                                return table_name
+                          
+                    # If it's not a get_data or _get_data call, check which function is being called
+                    elif isinstance(node.func.value, ast.Name):
+                        called_function = node.func.attr
+
+                        # Load the source of the called function and recurse
+                        try:
+                            called_func_source = inspect.getsource(getattr(self, called_function))
+                            # Clean up the source to handle any potential indentation issues
+                            cleaned_source = textwrap.dedent(called_func_source).strip()
+                            return self.extract_table_name_from_source(cleaned_source, called_function, depth + 1, max_depth)
+                        except (AttributeError, OSError) as e:
+                            pass
+               
         except Exception as e:
-            print(f"Error extracting table name: {e}")
+            pass
         
         return None
+
 
     def update_all_column_docs(self):
         """
         Updates the docstrings of all high-level methods by using the table information stored in DocsScraper.
         """
         # Fetch the table info from DocsScraper (already stored during initialization)
-        all_table_info = {table: self.get_docs(table) for table in self.method_table_mapping.values()}
+        all_table_info = {table: self.get_docs(table, False) for table in self.method_table_mapping.values()}
 
         # Iterate through methods and update their docstrings
         for method_name, table_name in self.method_table_mapping.items():
@@ -671,10 +711,12 @@ class PyXatu:
         if columns is None or table is None:
             return True
         assert type(columns) == str
+        if columns == "*":
+            return True
         if "," not in columns:
             columns += ","
         
-        existing_columns = self.get_docs(table)
+        existing_columns = self.get_docs(table, False)
         if existing_columns is None:
             return True
         if "Column" in existing_columns.columns:
@@ -686,7 +728,7 @@ class PyXatu:
                 if c.strip == "" or c.strip == " ":
                     continue
                 print("\n" + f"{c.strip()} not in {table} with columns:" + '\n'.join(existing_columns))
-                print("\nExisting columns: " + '\n'.join(self.get_docs(table)['Column'].to_list()))
+                print("\nExisting columns: " + '\n'.join(self.get_docs(table, False)['Column'].to_list()))
                 return False
         return True
 
