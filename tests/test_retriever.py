@@ -35,7 +35,8 @@ class TestDataRetriever(unittest.TestCase):
             groupby=None,
             orderby=None, 
             final_condition=None, 
-            limit=None
+            limit=None,
+            add_final_keyword_to_query=True
         )
 
         # Ensure the result is as expected

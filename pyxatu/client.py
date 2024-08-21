@@ -30,29 +30,20 @@ class ClickhouseClient:
             potential_columns = query.split("FROM")[0].split("DISTINCT")[1].strip()
         else:
             potential_columns = query.split("FROM")[0].split("SELECT")[1].strip()
-        print("potential_columns: ", potential_columns)
         if potential_columns != "*" and "," in potential_columns:
             potential_columns = ",".join([i.split("as ")[-1].strip() if "as " in i else i.strip() for i in potential_columns.split(",")])
         elif potential_columns != "*":
             potential_columns = [i.split("as ")[-1].strip() if "as " in i else i.strip() for i in [potential_columns]] 
-        print("potential_columns: ", potential_columns)
         return self._parse_response(response.text, columns, potential_columns)
 
     def _parse_response(self, response_text: str, columns: Optional[str] = "*", potential_columns: Optional[str] = None) -> pd.DataFrame:
         """Converts response text to a Pandas DataFrame and assigns column names if provided."""
         df = pd.read_csv(StringIO(response_text), sep='\t', header=None)
-        print("df: ", df)
         if columns and columns != "*":
-            print("columns: ", columns)
-            
             df.columns = [col.strip() for col in columns.split(',')]
-            print("df.columns: ", df.columns)
 
         elif potential_columns and potential_columns != "*":
-
-            print("potential_columns: ", potential_columns)
-            df.columns = [col.strip() for col in potential_columns.split(",")]
-            print("df.columns: ", df.columns)
+            df.columns = [col.strip() for col in potential_columns.split(",")] 
             
         return df
 
@@ -124,7 +115,9 @@ class ClickhouseClient:
         # Case 1: Single slot provided (it must be an integer)
         if isinstance(slot, int):
             slot_date_str = self.helpers.get_slot_datetime(slot)
-            return f"slot_start_date_time >= '{slot_date_str}'"
+            slot_date_str_n = self.helpers.get_slot_datetime(slot+1)
+            
+            return f"slot_start_date_time >= '{slot_date_str}' AND slot_start_date_time < '{slot_date_str_n}'"
 
         # Case 2: List of two slots provided (must be a list of exactly two integers)
         elif isinstance(slot, list) and len(slot) == 2 and all(isinstance(s, int) for s in slot):
