@@ -276,24 +276,24 @@ class TestDataRetriever(unittest.TestCase):
         #else:
         #    print_test_failed(test, how)
 
-    def test_get_reorgs_in_slots_exampleSlotRange(self):
+    def test_get_reorgs_exampleSlotRange(self):
 
-        test = "xatu.get_reorgs_in_slots"
+        test = "xatu.get_reorgs"
         how = "exampleSlotRange"
         func = eval(test)
         exampleSlotRange = [9000000, 9005100]
         res = func(exampleSlotRange, orderby="slot")
-        expect = '[9001619, 9002322, 9002396, 9002713, 9002896, 9003104, 9004001, 9004066, 9004675, 9004856]'
-        actual = str(res)
+        expect = '      slot\n0  9001619\n1  9002322\n2  9002396\n3  9002713\n4  9002896\n5  9003104\n6  9004001\n7  9004066\n8  9004675\n9  9004856'
+        actual = res.to_string()
         if expect == actual:
             print_test_ok(test, how)
         else:
             print_test_failed(test, how)
 
 
-    def test_get_reorgs_in_slots_timeInterval(self):
+    def test_get_reorgs_timeInterval(self):
 
-        test = "xatu.get_reorgs_in_slots"
+        test = "xatu.get_reorgs"
         how = "timeInterval"
         func = eval(test)
         time_interval = "30 days"

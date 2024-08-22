@@ -89,7 +89,12 @@ class MevBoostCaller:
         self.relays = relays
         self.endpoints = [RelayEndpoint(relay.strip()) for relay in relays.split(",")]
         
-            
+    def get_bids_over_range(self, slots: int, relays: List[str] = ALL_RELAYS, orderby: str = "relay"):
+        result = []
+        for slot in slots:
+            result.append(get_bids(slot, relays, orderby))
+        return pd.concat(result, ignore_index=True)
+           
     def get_bids(self, slot: int, relays: List[str] = ALL_RELAYS, orderby: str = "relay"):
         bids = []
         for ep in self.endpoints:
@@ -105,6 +110,12 @@ class MevBoostCaller:
             return df.reset_index(drop=True)
         else:
             return pd.DataFrame()
+        
+    def get_payloads_over_range(self, slots: int, relays: List[str] = ALL_RELAYS, limit: int = 100, orderby: str = "relay"):
+        result = []
+        for slot in slots:
+            result.append(get_payloads(slot, relays, limit, orderby))
+        return pd.concat(result, ignore_index=True)
         
     def get_payloads(self, slot: int, relays: List[str] = ALL_RELAYS, limit: int = 100, orderby: str = "relay"):
         payloads = []

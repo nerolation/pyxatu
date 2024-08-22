@@ -40,7 +40,8 @@ class ClickhouseClient:
         """Converts response text to a Pandas DataFrame and assigns column names if provided."""
         df = pd.read_csv(StringIO(response_text), sep='\t', header=None)
         if columns and columns != "*":
-            df.columns = [col.strip() for col in columns.split(',')]
+            columns = [col.strip() for col in columns.split(',')]
+            df.columns = [i.split("as ")[-1] if " as " in i else i for i in columns]
 
         elif potential_columns and potential_columns != "*":
             df.columns = [col.strip() for col in potential_columns.split(",")] 

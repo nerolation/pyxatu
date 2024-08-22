@@ -6,10 +6,10 @@ import shutil
 import logging
 import inspect
 import textwrap
+from io import StringIO
 from pathlib import Path
 from functools import wraps
 from typing import Optional, List, Dict, Any, Callable, TypeVar, Tuple
-from io import StringIO
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -23,7 +23,6 @@ from pyxatu.client import ClickhouseClient
 from pyxatu.retriever import DataRetriever
 from pyxatu.validators import ValidatorGadget
 from pyxatu.relayendpoint import MevBoostCaller
-
 
 
 def column_check_decorator(func):
@@ -46,7 +45,13 @@ def column_check_decorator(func):
     return wrapper
 
 class PyXatu:
-    def __init__(self, config_path: Optional[str] = None, use_env_variables: bool = False, log_level: str = 'INFO', relay: str = None) -> None:
+    def __init__(
+        self, 
+        config_path: Optional[str] = None, 
+        use_env_variables: bool = False, 
+        log_level: str = 'INFO', 
+        relay: str = None
+    ) -> None:
         if not logging.getLogger().hasHandlers():
             logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s - %(levelname)s - %(message)s')
         
@@ -105,10 +110,20 @@ class PyXatu:
     def _get_data(self, *args, **kwargs):
          return self.data_retriever.get_data(*args, **kwargs)
 
-    def get_blockevent_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", where: Optional[str] = None, 
-                       time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
-                       groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
-                       store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+    def get_blockevent_of_slot(
+        self, slot: Optional[Union[int, List[int]]] = None, 
+        columns: Optional[str] = "*", 
+        where: Optional[str] = None,            
+        time_interval: Optional[str] = None, 
+        network: str = "mainnet", 
+        max_retries: int = 1, 
+        groupby: str = None, 
+        orderby: Optional[str] = None, 
+        final_condition: Optional[str] = None, 
+        limit: int = None,
+        store_result_in_parquet: bool = None, 
+        custom_data_dir: str = None
+    ) -> Any:
         return self._get_data(
             data_table='beacon_api_eth_v1_events_block',
             slot=slot, 
@@ -124,10 +139,21 @@ class PyXatu:
             custom_data_dir=custom_data_dir
         )
      
-    def get_attestation_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", where: Optional[str] = None, 
-                 time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
-                 groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, 
-                 limit: int = None, store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+    def get_attestation_of_slot(
+        self, 
+        slot: Optional[Union[int, List[int]]] = None, 
+        columns: Optional[str] = "*", 
+        where: Optional[str] = None, 
+        time_interval: Optional[str] = None, 
+        network: str = "mainnet", 
+        max_retries: int = 1,   
+        groupby: str = None, 
+        orderby: Optional[str] = None, 
+        final_condition: Optional[str] = None,  
+        limit: int = None, 
+        store_result_in_parquet: bool = None, 
+        custom_data_dir: str = None
+        ) -> Any:
         res = self._get_data(
             data_table='canonical_beacon_elaborated_attestation',
             slot=slot, 
@@ -150,7 +176,7 @@ class PyXatu:
         
         return res    
  
-    def get_attestation_event_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", 
+    def get_attestation_event_of_slot(self, slot: Optional[Union[int, List[int]]] = None, columns: Optional[str] = "*", 
                 where: Optional[str] = None, time_interval: Optional[str] = None, network: str = "mainnet", 
                 max_retries: int = 1, groupby: str = None, orderby: Optional[str] = None, 
                 final_condition: Optional[str] = None, limit: int = None, 
@@ -174,10 +200,21 @@ class PyXatu:
         )
         return res
  
-    def get_proposer_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", where: Optional[str] = None, 
-                      time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
-                      groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
-                      store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+    def get_proposer_of_slot(
+        self, 
+        slot: Optional[Union[int, List[int]]] = None, 
+        columns: Optional[str] = "*", 
+        where: Optional[str] = None,         
+        time_interval: Optional[str] = None, 
+        network: str = "mainnet", 
+        max_retries: int = 1,       
+        groupby: str = None, 
+        orderby: Optional[str] = None, 
+        final_condition: Optional[str] = None, 
+        limit: int = None,
+        store_result_in_parquet: bool = None, 
+        custom_data_dir: str = None
+    ) -> Any:
         return self._get_data(
             data_table='canonical_beacon_proposer_duty',
             slot=slot, 
@@ -193,10 +230,10 @@ class PyXatu:
             custom_data_dir=custom_data_dir
         )
     
-    def get_reorgs_in_slots(self, slots: List[int] = None, where: Optional[str] = None, 
+    def get_reorgs(self, slots: List[int] = None, where: Optional[str] = None, 
                    time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
-                   groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
-                   store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+                   groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, 
+                   limit: int = None, store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
        
         potential_reorgs = self.data_retriever.get_data(
             data_table='beacon_api_eth_v1_events_chain_reorg',
@@ -227,12 +264,25 @@ class PyXatu:
             canonical=None
         )
         reorgs = sorted(set(potential_reorgs["slot-depth"].tolist()).intersection(missed))
-        return reorgs
+        return pd.DataFrame(reorgs, columns=["slot"])
     
-    def get_slots(self, slot: List[int] = None, columns: Optional[str] = "*", where: Optional[str] = None, 
-                  time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
-                  groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
-                  store_result_in_parquet: bool = None, custom_data_dir: str = None, add_missed: bool = True) -> Any:
+    def get_slots(
+        self, 
+        slot: List[int] = None, 
+        columns: Optional[str] = "*", 
+        where: Optional[str] = None,            
+        time_interval: Optional[str] = None, 
+        network: str = "mainnet", 
+        max_retries: int = 1,       
+        groupby: str = None, 
+        orderby: Optional[str] = None, 
+        final_condition: Optional[str] = None, 
+        limit: int = None,
+                  
+        store_result_in_parquet: bool = None, 
+        custom_data_dir: str = None, 
+        add_missed: bool = True
+    ) -> Any:
         
         df = self._get_data(
             data_table='canonical_beacon_block',
@@ -268,18 +318,30 @@ class PyXatu:
                 _c = "proposer_validator_index"
                 _c1 = "proposer_index"
                 _p = self.get_proposer_of_slot(slot=[int(df.slot.min()), int(df.slot.max()+1)], columns=f"slot,{_c}")
-                df[_c1] = df.apply(lambda x: _p[_p["slot"] == x["slot"]][_c].values[0] if x[_c1] == _d else x[_c1], axis=1)
+                df[_c1] = df.apply(
+                    lambda x: _p[_p["slot"] == x["slot"]][_c].values[0] if x[_c1] == _d else x[_c1], 
+                    axis=1
+                )
             if orderby and "," not in orderby:
                 df.sort_values(orderby, inplace=True)
         return df 
  
-    def get_missed_slots(self, slots: List[int] = None, columns: Optional[str] = "*", 
-            where: Optional[str] = None, time_interval: Optional[str] = None, 
-            network: str = "mainnet", max_retries: int = 1, groupby: str = None, orderby: Optional[str] = None,
-            final_condition: Optional[str] = None, limit: int = None, 
-            store_result_in_parquet: bool = None, custom_data_dir: str = None, 
-            canonical: Optional = None
-        ) -> Any:
+    def get_missed_slots(
+        self, 
+        slots: List[int] = None, 
+        columns: Optional[str] = "*",  
+        where: Optional[str] = None, 
+        time_interval: Optional[str] = None,  
+        network: str = "mainnet", 
+        max_retries: int = 1, 
+        groupby: str = None, 
+        orderby: Optional[str] = None,
+        final_condition: Optional[str] = None, 
+        limit: int = None, 
+        store_result_in_parquet: bool = None, 
+        custom_data_dir: str = None, 
+        canonical: Optional = None
+    ) -> Any:
         if canonical is None:
             canonical = self.get_slots( 
                 slot=[slots[0], slots[-1]] if isinstance(slots, list) else slots, 
@@ -298,11 +360,21 @@ class PyXatu:
         missed = set(range(canonical.slot.min(), canonical.slot.max()+1)) - set(canonical.slot.unique().tolist())
         return missed
     
-    def get_duties_for_slots(self, slot: Optional[int] = None, columns: Optional[str] = "*", 
-                            where: Optional[str] = None, time_interval: Optional[str] = None, 
-                            network: str = "mainnet", max_retries: int = 1, groupby: str = None, orderby: Optional[str] = None,
-                            final_condition: Optional[str] = None, limit: int = None, 
-                            store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+    def get_duties_for_slots(
+        self, 
+        slot: Optional[Union[int, List[int]]] = None, 
+        columns: Optional[str] = "*",               
+        where: Optional[str] = None, 
+        time_interval: Optional[str] = None,                
+        network: str = "mainnet", 
+        max_retries: int = 1, 
+        groupby: str = None, 
+        orderby: Optional[str] = None,              
+        final_condition: Optional[str] = None, 
+        limit: int = None,               
+        store_result_in_parquet: bool = None, 
+        custom_data_dir: str = None
+    ) -> Any:
         required_columns = ["slot", "validators"]
         committee = self._get_data(
             data_table='beacon_api_eth_v1_beacon_committee',
@@ -363,12 +435,23 @@ class PyXatu:
                 
         return head, target, source            
     
-    def get_elaborated_attestations(self, slot: Optional[int] = None, what: str = "source,target,head", 
-                columns: Optional[str] = "*", where: Optional[str] = None, 
-                time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
-                groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None,
-                limit: int = None, store_result_in_parquet: bool = None, 
-                custom_data_dir: str = None, only_status="correct,failed,offline") -> Any:
+    def get_elaborated_attestations(
+        self, 
+        slot: Optional[Union[int, List[int]]] = None, 
+        what: str = "source,target,head", 
+        columns: Optional[str] = "*", 
+        where: Optional[str] = None,     
+        time_interval: Optional[str] = None, 
+        network: str = "mainnet", 
+        max_retries: int = 1,    
+        groupby: str = None, 
+        orderby: Optional[str] = None, 
+        final_condition: Optional[str] = None,   
+        limit: int = None, 
+        store_result_in_parquet: bool = None, 
+        custom_data_dir: str = None, 
+        only_status="correct,failed,offline"
+    ) -> Any:
 
         if not isinstance(slot, list):
             slot = [slot, slot + 1]
@@ -442,11 +525,21 @@ class PyXatu:
 
         return final_df  
  
-    def get_beacon_block_v2(self, slots: List[int] = None, columns: Optional[str] = "*", 
-                where: Optional[str] = None, time_interval: Optional[str] = None, 
-                network: str = "mainnet", max_retries: int = 1, groupby: str = None, orderby: Optional[str] = None,
-                final_condition: Optional[str] = None, limit: int = None, 
-                store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+    def get_beacon_block_v2(
+        self, 
+        slots: List[int] = None, 
+        columns: Optional[str] = "*", 
+        where: Optional[str] = None, 
+        time_interval: Optional[str] = None, 
+        network: str = "mainnet", 
+        max_retries: int = 1, 
+        groupby: str = None, 
+        orderby: Optional[str] = None,
+        final_condition: Optional[str] = None, 
+        limit: int = None, 
+        store_result_in_parquet: bool = None, 
+        custom_data_dir: str = None
+    ) -> Any:
         block = self._get_data(
             data_table='beacon_api_eth_v2_beacon_block',
             slot=slots, 
@@ -463,18 +556,32 @@ class PyXatu:
         )
         return block
 
-    def get_block_size(self, slots: List[int], columns: Optional[str] = "*", where: Optional[str] = None, 
-                time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
-                groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None, 
-                store_result_in_parquet: bool = None, custom_data_dir: str = None, add_missed: bool = True):
+    def get_block_size(
+        self, 
+        slots: List[int], 
+        columns: Optional[str] = "*", 
+        where: Optional[str] = None, 
+        time_interval: Optional[str] = None, 
+        network: str = "mainnet", 
+        max_retries: int = 1, 
+        groupby: str = None, 
+        orderby: Optional[str] = None, 
+        final_condition: Optional[str] = None, 
+        limit: int = None,      
+        store_result_in_parquet: bool = None, 
+        custom_data_dir: str = None, 
+        add_missed: bool = True
+    ) -> Any:
         if isinstance(slots, int):
             slots = [slots, slots+1]
         if columns == None:
             columns = []
         sizes = self.get_slots( 
             slot=[slots[0], slots[-1]] if isinstance(slots, list) else slots, 
-            columns= ",".join(list(dict.fromkeys(columns.split(",") + ["block_total_bytes_compressed", "block_total_bytes"]))),
-            where=where, #" AND ".join(where + ["meta_client_geo_country = 'Finland'", "meta_client_name = 'utility-xatu-cannon'"]), 
+            columns= ",".join(list(dict.fromkeys(
+                columns.split(",") + ["block_total_bytes_compressed", "block_total_bytes"]
+            ))),
+            where=where,
             time_interval=time_interval, 
             network=network, 
             orderby="slot",
@@ -490,11 +597,21 @@ class PyXatu:
             sizes.drop("execution_payload_blob_gas_used", axis=1, inplace=True)
         return sizes
     
-    def get_blob_events_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", 
-            where: Optional[str] = None, time_interval: Optional[str] = None, 
-            network: str = "mainnet", max_retries: int = 1, groupby: str = None, orderby: Optional[str] = None,
-            final_condition: Optional[str] = None, limit: int = None, 
-            store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+    def get_blob_events_of_slot(
+        self, 
+        slot: Optional[Union[int, List[int]]] = None, 
+        columns: Optional[str] = "*", 
+        where: Optional[str] = None, 
+        time_interval: Optional[str] = None, 
+        network: str = "mainnet", 
+        max_retries: int = 1, 
+        groupby: str = None, 
+        orderby: Optional[str] = None,
+        final_condition: Optional[str] = None, 
+        limit: int = None, 
+        store_result_in_parquet: bool = None, 
+        custom_data_dir: str = None
+    ) -> Any:
         return self._get_data(
             data_table='beacon_api_eth_v1_events_blob_sidecar',
             slot=slot, 
@@ -510,11 +627,20 @@ class PyXatu:
             custom_data_dir=custom_data_dir
         )
     
-    def get_blobs_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", 
-            where: Optional[str] = None, time_interval: Optional[str] = None, 
-            network: str = "mainnet", max_retries: int = 1, groupby: str = None, orderby: Optional[str] = None,
-            final_condition: Optional[str] = None, limit: int = None, 
-            store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+    def get_blobs_of_slot(
+        self, 
+        slot: Optional[Union[int, List[int]]] = None, 
+        columns: Optional[str] = "*", 
+        where: Optional[str] = None, 
+        time_interval: Optional[str] = None, 
+        network: str = "mainnet", 
+        max_retries: int = 1, groupby: str = None, 
+        orderby: Optional[str] = None,
+        final_condition: Optional[str] = None, 
+        limit: int = None, 
+        store_result_in_parquet: bool = None, 
+        custom_data_dir: str = None
+    ) -> Any:
         return self._get_data(
             data_table='canonical_beacon_blob_sidecar',
             slot=slot, 
@@ -530,11 +656,21 @@ class PyXatu:
             custom_data_dir=custom_data_dir
         )
  
-    def get_withdrawals_of_slot(self, slot: Optional[int] = None, columns: Optional[str] = "*", 
-            where: Optional[str] = None, time_interval: Optional[str] = None, 
-            network: str = "mainnet", max_retries: int = 1, groupby: str = None, orderby: Optional[str] = None,
-            final_condition: Optional[str] = None, limit: int = None, 
-            store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
+    def get_withdrawals_of_slot(
+        self, 
+        slot: Optional[Union[int, List[int]]] = None, 
+        columns: Optional[str] = "*", 
+        where: Optional[str] = None, 
+        time_interval: Optional[str] = None, 
+        network: str = "mainnet", 
+        max_retries: int = 1, 
+        groupby: str = None, 
+        orderby: Optional[str] = None,
+        final_condition: Optional[str] = None, 
+        limit: int = None, 
+        store_result_in_parquet: bool = None, 
+        custom_data_dir: str = None
+    ) -> Any:
         """
         Retrieve withdrawal data for a given slot.
 
@@ -617,7 +753,13 @@ class PyXatu:
 
         return method_table_mapping
     
-    def extract_table_name_from_source(self, source: str, current_func_name: str = None, depth: int = 0, max_depth: int = 5) -> Optional[str]:
+    def extract_table_name_from_source(
+        self, 
+        source: str, 
+        current_func_name: str = None, 
+        depth: int = 0, 
+        max_depth: int = 5
+    ) -> Optional[str]:
         """
         Extracts the table name from the method's source code by looking for
         the first argument or keyword argument `data_table` in the call to 
@@ -663,7 +805,11 @@ class PyXatu:
                             called_func_source = inspect.getsource(getattr(self, called_function))
                             # Clean up the source to handle any potential indentation issues
                             cleaned_source = textwrap.dedent(called_func_source).strip()
-                            return self.extract_table_name_from_source(cleaned_source, called_function, depth + 1, max_depth)
+                            return self.extract_table_name_from_source(
+                                cleaned_source, called_function, 
+                                depth + 1, 
+                                max_depth
+                            )
                         except (AttributeError, OSError) as e:
                             pass
                
@@ -693,9 +839,20 @@ class PyXatu:
             # Use a helper function to avoid closure issues
             self._wrap_method_with_columns(method_name, method, table_name, columns_doc)
 
-    def _wrap_method_with_columns(self, method_name, method, table_name, columns_doc):
+    def _wrap_method_with_columns(
+        self, 
+        method_name: str, 
+        method: Optional[Callable], 
+        table_name: str, 
+        columns_doc: str
+    ) -> None:
         """
         Helper function to wrap a method with a new docstring that includes the available columns.
+
+        :param method_name: The name of the method to wrap.
+        :param method: The method to be wrapped.
+        :param table_name: The name of the table associated with the method.
+        :param columns_doc: The documentation string containing the available columns.
         """
         # Define a wrapper function that maintains the original method behavior
         def method_wrapper(*args, **kwargs):
@@ -705,8 +862,8 @@ class PyXatu:
         method_wrapper.__doc__ = (method.__doc__ or "") + f"\nAvailable columns for {table_name}:\n{columns_doc}\n"
 
         # Replace the original method with the wrapped version
-        setattr(self, method_name, method_wrapper)       
-        
+        setattr(self, method_name, method_wrapper)    
+
     def verify_columns(self, columns: str = None, table: str = None):
         if columns is None or table is None:
             return True
@@ -724,10 +881,11 @@ class PyXatu:
         else:
             return True
         for c in [i for i in columns.split(",") if i != ""]:
-            if c.strip() not in existing_columns:
-                if c.strip == "" or c.strip == " ":
+            _c = self.helpers.extract_inside_brackets(c.strip())
+            if _c not in existing_columns:
+                if _c == "" or _c == " ":
                     continue
-                print("\n" + f"{c.strip()} not in {table} with columns:" + '\n'.join(existing_columns))
+                print("\n" + f"{_c.strip()} not in {table} with columns:" + '\n'.join(existing_columns))
                 print("\nExisting columns: " + '\n'.join(self.get_docs(table, False)['Column'].to_list()))
                 return False
         return True

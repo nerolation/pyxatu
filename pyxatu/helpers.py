@@ -1,3 +1,4 @@
+import re
 import time
 from datetime import datetime, timezone
 
@@ -41,3 +42,10 @@ class PyXatuHelpers:
 
         current_slot = slot_number_at_known_timestamp + (current_timestamp - known_timestamp) // seconds_per_slot
         return current_slot
+    
+    def extract_inside_brackets(self, input_string: str = None):
+        match = re.search(r'\((.*?)\)', input_string)
+        if match:
+            return match.group(1)
+        else:
+            return input_string
