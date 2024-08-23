@@ -34,6 +34,11 @@ class ClickhouseClient:
             potential_columns = ",".join([i.split("as ")[-1].strip() if "as " in i else i.strip() for i in potential_columns.split(",")])
         elif potential_columns != "*":
             potential_columns = [i.split("as ")[-1].strip() if "as " in i else i.strip() for i in [potential_columns]] 
+            
+        if response.text == "":
+            logging.info("No data for query")
+            return None
+            
         return self._parse_response(response.text, columns, potential_columns)
 
     def _parse_response(self, response_text: str, columns: Optional[str] = "*", potential_columns: Optional[str] = None) -> pd.DataFrame:

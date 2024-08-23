@@ -33,11 +33,13 @@ class DataRetriever:
             limit=limit,
             add_final_keyword_to_query=add_final_keyword_to_query
         )
-        if store_result_in_parquet:
-            self.store_result_to_disk(result, custom_data_dir)
-            return
-        else:
-            return result
+        if not result is None:
+            if store_result_in_parquet:
+                self.store_result_to_disk(result, custom_data_dir)
+            else:
+                return result
+
+        
         
     def store_result_to_disk(self, result, custom_data_dir: str = None):
         if custom_data_dir is None:

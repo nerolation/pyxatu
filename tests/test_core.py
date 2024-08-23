@@ -62,11 +62,11 @@ class TestPyXatu(unittest.TestCase):
             "http://test-url", "user", "pass"
         )
 
-    def test_get_blockevent_of_slot(self):
+    def test_get_blockevent(self):
         # Set up the return value of get_data from DataRetriever
         self.mock_retriever_instance.get_data.return_value = 'mock_result'
 
-        result = self.pyxatu.get_blockevent_of_slot(slot=12345)
+        result = self.pyxatu.get_blockevent(slot=12345)
 
         # Assert that DataRetriever.get_data was called with correct arguments
         self.mock_retriever_instance.get_data.assert_called_once_with(

@@ -1,6 +1,7 @@
 import re
 import time
 from datetime import datetime, timezone
+from typing import List
 
 from pyxatu.utils import CONSTANTS
 
@@ -39,7 +40,6 @@ class PyXatuHelpers:
         slot_number_at_known_timestamp = 8000000
         known_timestamp = 1702824023  # Timestamp for slot 8000000 in UTC
         seconds_per_slot = 12
-
         current_slot = slot_number_at_known_timestamp + (current_timestamp - known_timestamp) // seconds_per_slot
         return current_slot
     
@@ -49,3 +49,23 @@ class PyXatuHelpers:
             return match.group(1)
         else:
             return input_string
+
+    def check_types(self, values_list: List[str], types_list: List[type]):
+        """
+        Checks whether the types of elements in values_list match the expected types in types_list.
+
+        :param values_list: List of values to check.
+        :param types_list: List of types corresponding to values in values_list.
+        :return: True if all values match their respective types, False otherwise.
+        :raises ValueError: If the lengths of values_list and types_list do not match.
+        """
+        if len(values_list) != len(types_list):
+            raise ValueError("The length of values_list and types_list must be the same.")
+
+        types_list = [str(i) for i in types_list]
+        
+        for value, expected_type in zip(values_list, types_list):
+            if str(type(value)) not in expected_type:
+                print(f"{type(value)} != {expected_type}")
+                return False
+        return True

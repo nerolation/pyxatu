@@ -22,7 +22,7 @@ class PostInstallCommand(install):
 
 setup(
     name='pyxatu',
-    version='0.1',
+    version='1.0',
     packages=find_packages(),
     include_package_data=True,
     package_data={
@@ -31,6 +31,10 @@ setup(
     install_requires=[
         'requests',
         'pandas',
+        'tqdm',
+        'bs4',
+        'termcolor',
+        'fastparquet'
     ],
     entry_points={
         'console_scripts': [

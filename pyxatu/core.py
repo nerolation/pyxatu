@@ -9,7 +9,7 @@ import textwrap
 from io import StringIO
 from pathlib import Path
 from functools import wraps
-from typing import Optional, List, Dict, Any, Callable, TypeVar, Tuple
+from typing import Optional, List, Dict, Any, Callable, TypeVar, Tuple, Union
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -106,11 +106,52 @@ class PyXatu:
         logging.info("Clickhouse configs set")
         return url, clickhouse_user, clickhouse_password
     
+    def _get_types(self, arguments: List[str]) -> List[type]:
+        """
+        Returns a list of types corresponding to the given argument names based on predefined type hints.
+
+        :param arguments: List of argument names as strings.
+        :return: List of types corresponding to the given arguments.
+        :raises ValueError: If an argument does not match the predefined list.
+        """
+
+        # Define a dictionary mapping argument names to their expected types
+        argument_types = {
+            "data_table": str,
+            "slot": [list, int, type(None)],
+            "columns": [str, type(None)],
+            "where": [str, type(None)],
+            "time_interval": [str, type(None)],
+            "network": str,
+            "max_retries": int,
+            "groupby": [str, type(None)],
+            "orderby": [str, type(None)],
+            "final_condition": [str, type(None)],
+            "limit": [int, type(None)],
+            "store_result_in_parquet": [bool, type(None)],
+            "custom_data_dir": [str, type(None)],
+            "add_final_keyword_to_query": [bool, type(None)]
+        }
+
+        types_list = []
+
+        # Iterate over the provided arguments and get the corresponding type
+        for arg in arguments:
+            if arg in argument_types:
+                types_list.append(argument_types[arg])
+            else:
+                print(arg)
+                (f"Argument '{arg}' is not recognized.")
+
+        return types_list
+
+    
     @column_check_decorator
     def _get_data(self, *args, **kwargs):
-         return self.data_retriever.get_data(*args, **kwargs)
+        self.helpers.check_types(kwargs.values(), self._get_types(kwargs.keys()))
+        return self.data_retriever.get_data(*args, **kwargs)
 
-    def get_blockevent_of_slot(
+    def get_blockevent(
         self, slot: Optional[Union[int, List[int]]] = None, 
         columns: Optional[str] = "*", 
         where: Optional[str] = None,            
@@ -126,7 +167,7 @@ class PyXatu:
     ) -> Any:
         return self._get_data(
             data_table='beacon_api_eth_v1_events_block',
-            slot=slot, 
+            slot=slot,
             columns=columns, 
             where=where, 
             time_interval=time_interval, 
@@ -139,19 +180,19 @@ class PyXatu:
             custom_data_dir=custom_data_dir
         )
      
-    def get_attestation_of_slot(
-        self, 
-        slot: Optional[Union[int, List[int]]] = None, 
-        columns: Optional[str] = "*", 
-        where: Optional[str] = None, 
-        time_interval: Optional[str] = None, 
-        network: str = "mainnet", 
-        max_retries: int = 1,   
-        groupby: str = None, 
-        orderby: Optional[str] = None, 
-        final_condition: Optional[str] = None,  
-        limit: int = None, 
-        store_result_in_parquet: bool = None, 
+    def get_attestation(
+        self,
+        slot: Optional[Union[int, List[int]]] = None,
+        columns: Optional[str] = "*",
+        where: Optional[str] = None,
+        time_interval: Optional[str] = None,
+        network: str = "mainnet",
+        max_retries: int = 1,
+        groupby: str = None,
+        orderby: Optional[str] = None,
+        final_condition: Optional[str] = None,
+        limit: int = None,
+        store_result_in_parquet: bool = None,
         custom_data_dir: str = None
         ) -> Any:
         res = self._get_data(
@@ -168,15 +209,13 @@ class PyXatu:
             store_result_in_parquet=store_result_in_parquet,
             custom_data_dir=custom_data_dir
         )
-        print("validators")
-        print( res.columns)
         if "validators" in set(res.columns):
             res["validators"] = res["validators"].apply(lambda x: eval(x))
             res = res.explode("validators").reset_index(drop=True)
         
         return res    
  
-    def get_attestation_event_of_slot(self, slot: Optional[Union[int, List[int]]] = None, columns: Optional[str] = "*", 
+    def get_attestation_event(self, slot: Optional[Union[int, List[int]]] = None, columns: Optional[str] = "*", 
                 where: Optional[str] = None, time_interval: Optional[str] = None, network: str = "mainnet", 
                 max_retries: int = 1, groupby: str = None, orderby: Optional[str] = None, 
                 final_condition: Optional[str] = None, limit: int = None, 
@@ -200,7 +239,7 @@ class PyXatu:
         )
         return res
  
-    def get_proposer_of_slot(
+    def get_proposer(
         self, 
         slot: Optional[Union[int, List[int]]] = None, 
         columns: Optional[str] = "*", 
@@ -317,7 +356,7 @@ class PyXatu:
             if "proposer_index" in df.columns:
                 _c = "proposer_validator_index"
                 _c1 = "proposer_index"
-                _p = self.get_proposer_of_slot(slot=[int(df.slot.min()), int(df.slot.max()+1)], columns=f"slot,{_c}")
+                _p = self.get_proposer(slot=[int(df.slot.min()), int(df.slot.max()+1)], columns=f"slot,{_c}")
                 df[_c1] = df.apply(
                     lambda x: _p[_p["slot"] == x["slot"]][_c].values[0] if x[_c1] == _d else x[_c1], 
                     axis=1
@@ -360,7 +399,7 @@ class PyXatu:
         missed = set(range(canonical.slot.min(), canonical.slot.max()+1)) - set(canonical.slot.unique().tolist())
         return missed
     
-    def get_duties_for_slots(
+    def get_duties(
         self, 
         slot: Optional[Union[int, List[int]]] = None, 
         columns: Optional[str] = "*",               
@@ -380,7 +419,7 @@ class PyXatu:
             data_table='beacon_api_eth_v1_beacon_committee',
             slot=slot, 
             columns=",".join(list(dict.fromkeys(
-                    [i.strip() for i in columns.split(",")] + required_columns 
+                    [i.strip() for i in columns.split(",") if i != "*"] + required_columns 
             ))), 
             where=where, 
             time_interval=time_interval, 
@@ -401,7 +440,7 @@ class PyXatu:
             duties = pd.concat([duties, temp_df], ignore_index=True).drop_duplicates()
         return duties.reset_index(drop=True)
     
-    def get_checkpoints_for_slot(self, slot: int):
+    def get_checkpoints(self, slot: int):
         epoch_start_slot = int(slot // 32 * 32)
         last_epoch_start_slot = int(epoch_start_slot - 32)
         slots = self.get_slots(
@@ -456,12 +495,12 @@ class PyXatu:
         if not isinstance(slot, list):
             slot = [slot, slot + 1]
             
-        required_columns = ["source_root", "target_root", "validators", "beacon_block_root"]
-        attestations = self.get_attestation_of_slot(
+        required_columns = ["slot", "source_root", "target_root", "validators", "beacon_block_root"]
+        attestations = self.get_attestation(
             slot=[slot[0]//32 * 32, slot[-1]//32 * 32 + 32], 
             columns=",".join(list(
                 dict.fromkeys(
-                    [i.strip() for i in columns.split(",")] + required_columns
+                    [i.strip() for i in columns.split(",") if i != "*"] + required_columns
                 )
             )),
             where=where, 
@@ -475,7 +514,7 @@ class PyXatu:
             custom_data_dir=custom_data_dir
         )
 
-        duties = self.get_duties_for_slots(
+        duties = self.get_duties(
             slot=[int(slot[0]//32 * 32), int(slot[-1]//32 * 32 + 32)], 
             columns="slot, validators", 
             where=where, 
@@ -494,7 +533,7 @@ class PyXatu:
 
         # Process each slot
         for _slot in tqdm(sorted(attestations.slot.unique()), desc="Processing slots"):
-            head, target, source = self.get_checkpoints_for_slot(_slot)
+            head, target, source = self.get_checkpoints(_slot)
             _attestations = attestations[attestations["slot"] == _slot]
             _duties = duties[duties["slot"] == _slot]
             _all = set(_duties.validators.tolist())
@@ -579,8 +618,8 @@ class PyXatu:
         sizes = self.get_slots( 
             slot=[slots[0], slots[-1]] if isinstance(slots, list) else slots, 
             columns= ",".join(list(dict.fromkeys(
-                columns.split(",") + ["block_total_bytes_compressed", "block_total_bytes"]
-            ))),
+                columns.split(",") + ["slot", "block_total_bytes_compressed", "block_total_bytes", "execution_payload_blob_gas_used"]
+            ))).replace("*,", ""),
             where=where,
             time_interval=time_interval, 
             network=network, 
@@ -597,7 +636,7 @@ class PyXatu:
             sizes.drop("execution_payload_blob_gas_used", axis=1, inplace=True)
         return sizes
     
-    def get_blob_events_of_slot(
+    def get_blob_events(
         self, 
         slot: Optional[Union[int, List[int]]] = None, 
         columns: Optional[str] = "*", 
@@ -627,7 +666,7 @@ class PyXatu:
             custom_data_dir=custom_data_dir
         )
     
-    def get_blobs_of_slot(
+    def get_blobs(
         self, 
         slot: Optional[Union[int, List[int]]] = None, 
         columns: Optional[str] = "*", 
@@ -656,7 +695,7 @@ class PyXatu:
             custom_data_dir=custom_data_dir
         )
  
-    def get_withdrawals_of_slot(
+    def get_withdrawals(
         self, 
         slot: Optional[Union[int, List[int]]] = None, 
         columns: Optional[str] = "*", 

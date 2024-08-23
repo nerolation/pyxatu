@@ -92,9 +92,9 @@ class TestDataRetriever(unittest.TestCase):
             print_test_failed(test, how)
 
 
-    def test_get_proposer_of_slot_exampleSlot(self):
+    def test_get_proposer_exampleSlot(self):
 
-        test = "xatu.get_proposer_of_slot"
+        test = "xatu.get_proposer"
         how = "exampleSlot"
         func = eval(test)
         exampleSlot = 9000000
@@ -107,8 +107,8 @@ class TestDataRetriever(unittest.TestCase):
             print_test_failed(test, how)
 
 
-    def test_get_proposer_of_slot_exampleSlotRange(self):
-        test = "xatu.get_proposer_of_slot"
+    def test_get_proposer_exampleSlotRange(self):
+        test = "xatu.get_proposer"
         how = "exampleSlotRange"
         func = eval(test)
         exampleSlotRange = [9000000, 9000010]
@@ -121,9 +121,9 @@ class TestDataRetriever(unittest.TestCase):
             print_test_failed(test, how)
 
 
-    def test_get_proposer_of_slot_timeInterval(self):
+    def test_get_proposer_timeInterval(self):
 
-        test = "xatu.get_proposer_of_slot"
+        test = "xatu.get_proposer"
         how = "timeInterval"
         func = eval(test)
         exampleSlotRange = [9314159, 9315159]
@@ -137,9 +137,9 @@ class TestDataRetriever(unittest.TestCase):
         else:
             print_test_failed(test, how)
 
-    def test_get_blockevent_of_slot_exampleSlot(self):
+    def test_get_blockevent_exampleSlot(self):
 
-        test = "xatu.get_blockevent_of_slot"
+        test = "xatu.get_blockevent"
         how = "exampleSlot"
         func = eval(test)
         exampleSlot = 9000000
@@ -152,9 +152,9 @@ class TestDataRetriever(unittest.TestCase):
         else:
             print_test_failed(test, how)
 
-    def test_get_blockevent_of_slot_exampleSlotRange(self):
+    def test_get_blockevent_exampleSlotRange(self):
 
-        test = "xatu.get_blockevent_of_slot"
+        test = "xatu.get_blockevent"
         how = "exampleSlotRange"
         func = eval(test)
         exampleSlotRange = [9000000, 9000010]
@@ -167,9 +167,9 @@ class TestDataRetriever(unittest.TestCase):
         else:
             print_test_failed(test, how)
 
-    def test_get_blockevent_of_slot_timeInterval(self):
+    def test_get_blockevent_timeInterval(self):
 
-        test = "xatu.get_blockevent_of_slot"
+        test = "xatu.get_blockevent"
         how = "timeInterval"
         func = eval(test)
         exampleSlotRange = [9314159, 9315159]
@@ -183,9 +183,9 @@ class TestDataRetriever(unittest.TestCase):
         else:
             print_test_failed(test, how)
 
-    def test_get_attestation_of_slot_exampleSlot(self):
+    def test_get_attestation_exampleSlot(self):
 
-        test = "xatu.get_attestation_of_slot"
+        test = "xatu.get_attestation"
         how = "exampleSlot"
         func = eval(test)
         exampleSlot = 9000000
@@ -198,9 +198,9 @@ class TestDataRetriever(unittest.TestCase):
         else:
             print_test_failed(test, how)
 
-    def test_get_attestation_of_slot_exampleSlotRange(self):
+    def test_get_attestation_exampleSlotRange(self):
 
-        test = "xatu.get_attestation_of_slot"
+        test = "xatu.get_attestation"
         how = "exampleSlotRange"
         func = eval(test)
         exampleSlotRange = [9000000, 9000001]
@@ -213,9 +213,9 @@ class TestDataRetriever(unittest.TestCase):
         else:
             print_test_failed(test, how)
 
-    def test_get_attestation_of_slot_timeInterval(self):
+    def test_get_attestation_timeInterval(self):
 
-        test = "xatu.get_attestation_of_slot"
+        test = "xatu.get_attestation"
         how = "timeInterval"
         func = eval(test)
         exampleSlotRange = 9000000
@@ -230,9 +230,9 @@ class TestDataRetriever(unittest.TestCase):
             print_test_failed(test, how)
             
             
-    def test_get_attestation_event_of_slot_exampleSlot(self):
+    def test_get_attestation_event_exampleSlot(self):
 
-        test = "xatu.get_attestation_event_of_slot"
+        test = "xatu.get_attestation_event"
         how = "exampleSlot"
         func = eval(test)
         exampleSlot = 9000000
@@ -245,9 +245,9 @@ class TestDataRetriever(unittest.TestCase):
         #else:
         #    print_test_failed(test, how)
 
-    def test_get_attestation_event_of_slot_exampleSlotRange(self):
+    def test_get_attestation_event_exampleSlotRange(self):
 
-        test = "xatu.get_attestation_event_of_slot"
+        test = "xatu.get_attestation_event"
         how = "exampleSlotRange"
         func = eval(test)
         exampleSlotRange = [9000000, 9000010]
@@ -260,9 +260,9 @@ class TestDataRetriever(unittest.TestCase):
         #else:
         #    print_test_failed(test, how)
 
-    def test_get_attestation_event_of_slot_timeInterval(self):
+    def test_get_attestation_event_timeInterval(self):
 
-        test = "xatu.get_attestation_event_of_slot"
+        test = "xatu.get_attestation_event"
         how = "timeInterval"
         func = eval(test)
         exampleSlotRange = [9314159, 9314160]
