@@ -1,2 +1,21 @@
-requests
-pandas
+beautifulsoup4==4.12.3
+bs4==0.0.2
+certifi==2024.7.4
+charset-normalizer==3.3.2
+cramjam==2.8.3
+fastparquet==2024.5.0
+fsspec==2024.6.1
+idna==3.7
+numpy==2.1.0
+packaging==24.1
+pandas==2.2.2
+python-dateutil==2.9.0.post0
+pytz==2024.1
+pyxatu @ file:///home/devops/toni/datanalysis/pyxatu
+requests==2.32.3
+six==1.16.0
+soupsieve==2.6
+termcolor==2.4.0
+tqdm==4.66.5
+tzdata==2024.1
+urllib3==2.2.2
