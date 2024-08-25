@@ -1,3 +1,4 @@
+import time
 import logging
 import requests
 import pandas as pd
@@ -19,12 +20,14 @@ class ClickhouseClient:
     @retry_on_failure()
     def execute_query(self, query: str, columns: Optional[str] = "*") -> pd.DataFrame:
         logging.info(f"Executing query: {query}")
+        start_time = time.time()
         response = requests.get(
             self.url,
             params={'query': query},
             auth=self.auth,
             timeout=self.timeout
         )
+        logging.info(f"Query executed in {time.time() - start_time:.2f} seconds")
         response.raise_for_status()
         if "DISTINCT" in query.upper():
             potential_columns = query.split("FROM")[0].split("DISTINCT")[1].strip()
@@ -132,4 +135,5 @@ class ClickhouseClient:
             return f"slot_start_date_time >= '{lower_slot_date_str}' AND slot_start_date_time < '{upper_slot_date_str}'"
 
         else:
+            print(slot)
             raise ValueError(f"Invalid input: either a valid integer slot or a list of exactly two slots must be provided. Provided input type: {type(slot)}, Slot variable contains: {str(slot)}")

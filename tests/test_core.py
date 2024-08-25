@@ -72,28 +72,18 @@ class TestPyXatu(unittest.TestCase):
         self.mock_retriever_instance.get_data.assert_called_once_with(
             'beacon_api_eth_v1_events_block',
             slot=12345,
-            columns="*",
-            where=None,
-            time_interval=None,
-            network="mainnet",
-            groupby=None,
-            orderby=None,
-            final_condition=None,
-            limit=None,
-            store_result_in_parquet=None,
-            custom_data_dir=None
         )
         self.assertEqual(result, 'mock_result')
 
     def test_get_reorgs(self):
         # Mock DataRetriever.get_data for reorgs and canonical slots
         self.mock_retriever_instance.get_data.side_effect = [
-            pd.DataFrame({'slot-depth': [9000000, 9000001]}),  # Mock reorgs data
+            pd.DataFrame({'reorged_slot': [9000000, 9000001]}),  # Mock reorgs data
             pd.DataFrame({'slot': [8999999, 9000000, 9000001, 9000002, 9000003]})  
         ]
 
         # Call the method under test
-        result = self.pyxatu.get_reorgs(slots=[9000000, 9000001])
+        result = self.pyxatu.get_reorgs(slot=[9000000, 9000001])
 
         # Ensure that get_data was called twice: once for reorgs and once for canonical slots
         self.assertEqual(self.mock_retriever_instance.get_data.call_count, 2)
@@ -105,12 +95,12 @@ class TestPyXatu(unittest.TestCase):
     def test_get_reorgs_no_reorgs(self):
         # Mock DataRetriever.get_data for reorgs (no reorgs in the data)
         self.mock_retriever_instance.get_data.side_effect = [
-            pd.DataFrame({'slot-depth': []}),  # No reorgs
+            pd.DataFrame({'reorged_slot': []}),  # No reorgs
             pd.DataFrame({'slot': [8999999, 9000000, 9000001, 9000002, 9000003]})  # Mock canonical slots data
         ]
 
         # Call the method under test with slots that do not have reorgs
-        result = self.pyxatu.get_reorgs(slots=[9000000, 9000001])
+        result = self.pyxatu.get_reorgs(slot=[9000000, 9000001])
 
         # Ensure that the result is an empty list, as there are no reorgs
         self.assertEqual(result.to_string(), pd.DataFrame([], columns=["slot"]).to_string())
@@ -119,12 +109,12 @@ class TestPyXatu(unittest.TestCase):
         # Mock DataRetriever.get_data for reorgs and canonical slots
         # Simulate missing canonical slots
         self.mock_retriever_instance.get_data.side_effect = [
-            pd.DataFrame({'slot-depth': [9000000, 9000001]}),  # Mock reorgs data
+            pd.DataFrame({'reorged_slot': [9000000, 9000001]}),  # Mock reorgs data
             pd.DataFrame({'slot': [8999999, 9000002, 9000003]})  # Missing canonical slots 9000000 and 9000001
         ]
 
         # Call the method under test with slots
-        result = self.pyxatu.get_reorgs(slots=[9000000, 9000001])
+        result = self.pyxatu.get_reorgs(slot=[9000000, 9000001])
 
         # Ensure that the correct reorg slots are identified
         self.assertEqual(result.to_string(), pd.DataFrame([9000000, 9000001], columns=["slot"]).to_string())

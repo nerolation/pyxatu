@@ -2,7 +2,6 @@ import os
 import ast
 import json
 import time
-import shutil
 import logging
 import inspect
 import textwrap
@@ -78,8 +77,6 @@ class PyXatu:
         
         self.mevboost = MevBoostCaller()
         self.helpers = PyXatuHelpers()
-        self.validators = ValidatorGadget()
-        self.docs = DocsScraper()
         
         self.method_table_mapping = self.create_method_table_mapping()
         
@@ -105,6 +102,31 @@ class PyXatu:
 
         logging.info("Clickhouse configs set")
         return url, clickhouse_user, clickhouse_password
+    
+    def execute_query(self, query: str, columns: Optional[str] = "*", time_interval: Optional[str] = None) -> Any:
+        return self.client.execute_query(query, columns)
+    
+    @property
+    def validators(self):
+        if not hasattr(self, '_validators'):
+            self._validators = ValidatorGadget()
+        return self._validators
+    
+    @property
+    def docs(self):
+        if not hasattr(self, '_docs'):
+            self._docs = DocsScraper()
+        return self._docs
+    
+    def get_docs(self, table_name: str = None, print_loading: bool = True):
+        """
+        Retrieves table information, such as available columns, from the DocsScraper.
+        """
+        if table_name in self.method_table_mapping.keys():
+            table_name = self.method_table_mapping[table_name]
+        if print_loading:
+            print(f"Retrieving schema for table {table_name}")
+        return self.docs.get_table_info(table_name)
     
     def _get_types(self, arguments: List[str]) -> List[type]:
         """
@@ -151,193 +173,54 @@ class PyXatu:
         self.helpers.check_types(kwargs.values(), self._get_types(kwargs.keys()))
         return self.data_retriever.get_data(*args, **kwargs)
 
-    def get_blockevent(
-        self, slot: Optional[Union[int, List[int]]] = None, 
-        columns: Optional[str] = "*", 
-        where: Optional[str] = None,            
-        time_interval: Optional[str] = None, 
-        network: str = "mainnet", 
-        max_retries: int = 1, 
-        groupby: str = None, 
-        orderby: Optional[str] = None, 
-        final_condition: Optional[str] = None, 
-        limit: int = None,
-        store_result_in_parquet: bool = None, 
-        custom_data_dir: str = None
-    ) -> Any:
-        return self._get_data(
-            data_table='beacon_api_eth_v1_events_block',
-            slot=slot,
-            columns=columns, 
-            where=where, 
-            time_interval=time_interval, 
-            network=network, 
-            groupby=groupby,
-            orderby=orderby,
-            final_condition=final_condition,
-            limit=limit,
-            store_result_in_parquet=store_result_in_parquet,
-            custom_data_dir=custom_data_dir
-        )
+    def _generic_getter(self, table_name: str, **kwargs) -> Any:
+        return self._get_data(data_table=table_name, **kwargs)
+
+    def get_blockevent(self, **kwargs):
+        return self._generic_getter('beacon_api_eth_v1_events_block', **kwargs)
      
-    def get_attestation(
-        self,
-        slot: Optional[Union[int, List[int]]] = None,
-        columns: Optional[str] = "*",
-        where: Optional[str] = None,
-        time_interval: Optional[str] = None,
-        network: str = "mainnet",
-        max_retries: int = 1,
-        groupby: str = None,
-        orderby: Optional[str] = None,
-        final_condition: Optional[str] = None,
-        limit: int = None,
-        store_result_in_parquet: bool = None,
-        custom_data_dir: str = None
-        ) -> Any:
-        res = self._get_data(
-            data_table='canonical_beacon_elaborated_attestation',
-            slot=slot, 
-            columns=columns, 
-            where=where, 
-            time_interval=time_interval, 
-            network=network, 
-            groupby=groupby,
-            orderby=orderby,
-            final_condition=final_condition,
-            limit=limit,
-            store_result_in_parquet=store_result_in_parquet,
-            custom_data_dir=custom_data_dir
-        )
+    def get_attestation(self, **kwargs) -> Any:
+        res = self._generic_getter('canonical_beacon_elaborated_attestation', **kwargs)
         if "validators" in set(res.columns):
             res["validators"] = res["validators"].apply(lambda x: eval(x))
             res = res.explode("validators").reset_index(drop=True)
-        
         return res    
  
-    def get_attestation_event(self, slot: Optional[Union[int, List[int]]] = None, columns: Optional[str] = "*", 
-                where: Optional[str] = None, time_interval: Optional[str] = None, network: str = "mainnet", 
-                max_retries: int = 1, groupby: str = None, orderby: Optional[str] = None, 
-                final_condition: Optional[str] = None, limit: int = None, 
-                store_result_in_parquet: bool = None, custom_data_dir: str = None,
-                add_final_keyword_to_query: bool = False) -> Any:
-        
-        res = self._get_data(
-            data_table='beacon_api_eth_v1_events_attestation',
-            slot=slot, 
-            columns=columns, 
-            where=where, 
-            time_interval=time_interval, 
-            network=network, 
-            groupby=groupby,
-            orderby=orderby,
-            final_condition=final_condition,
-            limit=limit,
-            store_result_in_parquet=store_result_in_parquet,
-            custom_data_dir=custom_data_dir,
-            add_final_keyword_to_query=add_final_keyword_to_query
-        )
-        return res
+    def get_attestation_event(self, add_final_keyword_to_query: bool = False, **kwargs) -> Any:
+        kwargs["add_final_keyword_to_query"] = add_final_keyword_to_query
+        return self._generic_getter('beacon_api_eth_v1_events_attestation', **kwargs)
  
-    def get_proposer(
-        self, 
-        slot: Optional[Union[int, List[int]]] = None, 
-        columns: Optional[str] = "*", 
-        where: Optional[str] = None,         
-        time_interval: Optional[str] = None, 
-        network: str = "mainnet", 
-        max_retries: int = 1,       
-        groupby: str = None, 
-        orderby: Optional[str] = None, 
-        final_condition: Optional[str] = None, 
-        limit: int = None,
-        store_result_in_parquet: bool = None, 
-        custom_data_dir: str = None
-    ) -> Any:
-        return self._get_data(
-            data_table='canonical_beacon_proposer_duty',
-            slot=slot, 
-            columns=columns, 
-            where=where, 
-            time_interval=time_interval, 
-            network=network, 
-            groupby=groupby,
-            orderby=orderby,
-            final_condition=final_condition,
-            limit=limit,
-            store_result_in_parquet=store_result_in_parquet,
-            custom_data_dir=custom_data_dir
-        )
+    def get_proposer(self, **kwargs) -> Any:
+        return self._generic_getter('canonical_beacon_proposer_duty', **kwargs)
     
-    def get_reorgs(self, slots: List[int] = None, where: Optional[str] = None, 
-                   time_interval: Optional[str] = None, network: str = "mainnet", max_retries: int = 1, 
-                   groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, 
-                   limit: int = None, store_result_in_parquet: bool = None, custom_data_dir: str = None) -> Any:
-       
+    def get_reorgs(self, **kwargs) -> Any:
+        if not "columns" in kwargs:
+            kwargs["columns"] = "(slot-depth) as reorged_slot"
         potential_reorgs = self.data_retriever.get_data(
             data_table='beacon_api_eth_v1_events_chain_reorg',
-            slot=slots, 
-            columns="slot-depth", 
-            where=where, 
-            time_interval=time_interval, 
-            network=network, 
-            groupby=groupby,
-            orderby=orderby,
-            final_condition=final_condition,
-            limit=limit,
-            store_result_in_parquet=store_result_in_parquet,
-            custom_data_dir=custom_data_dir
+            **kwargs
         )
+        if "reorged_slot" not in potential_reorgs.columns:
+            potential_reorgs.columns = ["reorged_slot"]
+            
+        if "slot" in kwargs:
+            slot = kwargs["slot"]
+            kwargs["slot"] = [slot[0]-32, slot[-1]+31] if isinstance(slot, list) else slot
+        else:
+            kwargs["slot"] = None
+        
+        kwargs = {i: j for i, j in kwargs.items() if i != "columns"}
+        kwargs["columns"] = "slot"
         missed = self.get_missed_slots( 
-            slots=[slots[0]-32, slots[-1]+31] if isinstance(slots, list) else None, 
-            columns="slot", 
-            where=where, 
-            time_interval=time_interval, 
-            network=network, 
-            groupby=groupby,
-            orderby=orderby,
-            final_condition=final_condition,
-            limit=limit,
-            store_result_in_parquet=False,
-            custom_data_dir=None,
-            canonical=None
+            **kwargs
         )
-        reorgs = sorted(set(potential_reorgs["slot-depth"].tolist()).intersection(missed))
+        reorgs = sorted(set(potential_reorgs["reorged_slot"].tolist()).intersection(missed))
         return pd.DataFrame(reorgs, columns=["slot"])
     
-    def get_slots(
-        self, 
-        slot: List[int] = None, 
-        columns: Optional[str] = "*", 
-        where: Optional[str] = None,            
-        time_interval: Optional[str] = None, 
-        network: str = "mainnet", 
-        max_retries: int = 1,       
-        groupby: str = None, 
-        orderby: Optional[str] = None, 
-        final_condition: Optional[str] = None, 
-        limit: int = None,
-                  
-        store_result_in_parquet: bool = None, 
-        custom_data_dir: str = None, 
-        add_missed: bool = True
-    ) -> Any:
-        
-        df = self._get_data(
-            data_table='canonical_beacon_block',
-            slot=slot, 
-            columns=columns, 
-            where=where, 
-            time_interval=time_interval,
-            network=network, 
-            groupby=groupby,
-            orderby=orderby,
-            final_condition=final_condition,
-            limit=limit,
-            store_result_in_parquet=store_result_in_parquet,
-            custom_data_dir=custom_data_dir
-        )
-        
+    def get_slots(self, add_missed: bool = True, **kwargs) -> Any:
+                
+        df = self._generic_getter('canonical_beacon_block', **kwargs)
+          
         if add_missed:
             missed = self.get_missed_slots(canonical=df)
             missed_df = pd.DataFrame(missed, columns=['slot'])
@@ -361,40 +244,20 @@ class PyXatu:
                     lambda x: _p[_p["slot"] == x["slot"]][_c].values[0] if x[_c1] == _d else x[_c1], 
                     axis=1
                 )
-            if orderby and "," not in orderby:
-                df.sort_values(orderby, inplace=True)
+        if "orderby" in kwargs and "," not in kwargs["orderby"]:
+            df.sort_values(kwargs["orderby"], inplace=True)
         return df 
  
-    def get_missed_slots(
-        self, 
-        slots: List[int] = None, 
-        columns: Optional[str] = "*",  
-        where: Optional[str] = None, 
-        time_interval: Optional[str] = None,  
-        network: str = "mainnet", 
-        max_retries: int = 1, 
-        groupby: str = None, 
-        orderby: Optional[str] = None,
-        final_condition: Optional[str] = None, 
-        limit: int = None, 
-        store_result_in_parquet: bool = None, 
-        custom_data_dir: str = None, 
-        canonical: Optional = None
-    ) -> Any:
+    def get_missed_slots(self, canonical: Optional = None, **kwargs) -> Any:
+        slot = kwargs.get("slot")
+        if not slot is None:
+            kwargs["slot"] = [slot[0], slot[-1]] if isinstance(slot, list) else slot
+        
+        if not "add_missed" in kwargs:
+            kwargs["add_missed"] = False
         if canonical is None:
             canonical = self.get_slots( 
-                slot=[slots[0], slots[-1]] if isinstance(slots, list) else slots, 
-                columns="slot", 
-                where=where, 
-                time_interval=time_interval, 
-                network=network, 
-                groupby=groupby,
-                orderby=orderby,
-                final_condition=final_condition,
-                limit=limit,
-                store_result_in_parquet=store_result_in_parquet,
-                custom_data_dir=custom_data_dir,
-                add_missed=False
+                **kwargs
             )      
         missed = set(range(canonical.slot.min(), canonical.slot.max()+1)) - set(canonical.slot.unique().tolist())
         return missed
@@ -418,9 +281,7 @@ class PyXatu:
         committee = self._get_data(
             data_table='beacon_api_eth_v1_beacon_committee',
             slot=slot, 
-            columns=",".join(list(dict.fromkeys(
-                    [i.strip() for i in columns.split(",") if i != "*"] + required_columns 
-            ))), 
+            columns=self.clean_columns(columns, required_columns), 
             where=where, 
             time_interval=time_interval, 
             network=network, 
@@ -489,7 +350,7 @@ class PyXatu:
         limit: int = None, 
         store_result_in_parquet: bool = None, 
         custom_data_dir: str = None, 
-        only_status="correct,failed,offline"
+        only_status: Optional[str] = "correct,failed,offline"
     ) -> Any:
 
         if not isinstance(slot, list):
@@ -498,11 +359,7 @@ class PyXatu:
         required_columns = ["slot", "source_root", "target_root", "validators", "beacon_block_root"]
         attestations = self.get_attestation(
             slot=[slot[0]//32 * 32, slot[-1]//32 * 32 + 32], 
-            columns=",".join(list(
-                dict.fromkeys(
-                    [i.strip() for i in columns.split(",") if i != "*"] + required_columns
-                )
-            )),
+            columns=self.clean_columns(columns, required_columns),
             where=where, 
             time_interval=time_interval, 
             network=network, 
@@ -540,7 +397,7 @@ class PyXatu:
             voting_validators = set(_attestations.validators.tolist())
 
             def process_vote(vote_type: str, root_value: str) -> None:
-                correct = set(_attestations[_attestations[f"{vote_type}_root"] == root_value].validators.tolist())
+                correct = set(_attestations.loc[_attestations[f"{vote_type}_root"] == root_value, 'validators'])
                 correct = correct.intersection(_all)
                 failing_validators = _all.intersection(voting_validators) - correct
                 offline_validators = _all - voting_validators
@@ -617,9 +474,10 @@ class PyXatu:
             columns = []
         sizes = self.get_slots( 
             slot=[slots[0], slots[-1]] if isinstance(slots, list) else slots, 
-            columns= ",".join(list(dict.fromkeys(
-                columns.split(",") + ["slot", "block_total_bytes_compressed", "block_total_bytes", "execution_payload_blob_gas_used"]
-            ))).replace("*,", ""),
+            columns= self.clean_columns(
+                columns, 
+                ["slot", "block_total_bytes_compressed", "block_total_bytes", "execution_payload_blob_gas_used"]
+            ),
             where=where,
             time_interval=time_interval, 
             network=network, 
@@ -756,19 +614,6 @@ class PyXatu:
             store_result_in_parquet=store_result_in_parquet,
             custom_data_dir=custom_data_dir
         )
-    
-    def execute_query(self, query: str, columns: Optional[str] = "*", time_interval: Optional[str] = None) -> Any:
-        return self.client.execute_query(query, columns)
-    
-    def get_docs(self, table_name: str = None, print_loading: bool = True):
-        """
-        Retrieves table information, such as available columns, from the DocsScraper.
-        """
-        if table_name in self.method_table_mapping.keys():
-            table_name = self.method_table_mapping[table_name]
-        if print_loading:
-            print(f"Retrieving schema for table {table_name}")
-        return self.docs.get_table_info(table_name)
     
     def create_method_table_mapping(self):
         """
@@ -928,6 +773,10 @@ class PyXatu:
                 print("\nExisting columns: " + '\n'.join(self.get_docs(table, False)['Column'].to_list()))
                 return False
         return True
+    
+    def clean_columns(self, columns: str, required_columns: List[str]) -> str:
+        columns_list = [i.strip() for i in columns.split(",") if i != "*"]
+        return ",".join(list(dict.fromkeys(columns_list + required_columns)))
 
     def preview_result(self, func: Callable[..., Any], limit: int = 100, **kwargs) -> Any:
         kwargs['limit'] = limit
