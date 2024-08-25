@@ -1,3 +1,4 @@
+import time
 import logging
 import requests
 import pandas as pd
@@ -50,7 +51,7 @@ ed = "https://relay.edennetwork.io" + path
 ul = "https://relay-analytics.ultrasound.money" + path
 ag = "https://agnostic-relay.net" + path
 ae = "https://aestus.live" + path
-ti = "https://titanrelay.xyz/" + path
+ti = "https://titanrelay.xyz" + path
 
 urls = {
     "bloxroute (max profit)": mp,
@@ -127,6 +128,7 @@ class MevBoostCaller:
                 
         if payloads:
             df = pd.DataFrame(payloads, columns=payloads_columns)
+            df = df[df["slot"] == slot]
             if orderby:
                 df.sort_values(orderby, inplace=True)
             return df.reset_index(drop=True)
@@ -141,24 +143,38 @@ class RelayEndpoint:
         self.minslot = minblocks_relay.get(name)
 
 
-    def _get_bids(self, slot: int):
+    def _get_bids(self, slot: int, retries: int = 3):
         if self.minslot > slot:
             logging.info(f"Relay not yet active at slot {slot}")
-        res = requests.get(self.url.format("builder_blocks_received") + f"slot={slot}", timeout=2, headers=HEADERS)
+        logging.info(self.url.format("builder_blocks_received") + f"slot={slot}")
+        res = requests.get(self.url.format("builder_blocks_received") + f"slot={slot}", timeout=20, headers=HEADERS)
         if not res.status_code == 200:
-            raise AssertionError(f"Response Status Code != 200; Request: {self.url.format('builder_blocks_received')}slot={slot}")
+            if retries == 0:
+                return None
+            else:
+                logging.info('Something for {self.name} failed: Response Status Code != 200; \n'+
+                             f"Request: {self.url.format('proposer_payload_delivered')}" + f"cursor={slot}" + limit)
+                return None
+            return self._get_bids(slot, retries-1)
         return eval(res.content.decode("utf-8").replace("false", "False").replace("true", "True"))
     
-    def _get_payloads(self, slot: int, limit: int = None):
+    def _get_payloads(self, slot: int, limit: int = None, retries: int = 3):
         if self.minslot > slot:
             logging.info(f"Relay not yet active at slot {slot}")
         if limit:
             limit = f"&limit={limit}"
         else:
             limit = ""
-        res = requests.get(self.url.format("proposer_payload_delivered") + f"cursor={slot}" + limit, timeout=2, headers=HEADERS)
+        logging.info(self.url.format("proposer_payload_delivered") + f"cursor={slot}" + limit)
+        res = requests.get(self.url.format("proposer_payload_delivered") + f"cursor={slot}" + limit, timeout=20, headers=HEADERS)
         if not res.status_code == 200:
-            raise AssertionError(f"Response Status Code != 200; Request: {self.url.format('proposer_payload_delivered')}cursor={slot}")
+            time.sleep(5)
+            if retries == 0:
+                return None
+            else:
+                logging.info('Something for {self.name} failed: Response Status Code != 200; \n'+
+                             f"Request: {self.url.format('proposer_payload_delivered')}" + f"cursor={slot}" + limit)
+            return self._get_payloads(slot, limit, retries-1)
         return eval(res.content.decode("utf-8").replace("false", "False").replace("true", "True"))
     
     def _fetch_bid_row(self, r, optimistic=False) -> list:

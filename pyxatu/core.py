@@ -664,7 +664,7 @@ class PyXatu:
                 # Look for calls to self._get_data() or self.get_data()
                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
 
-                    if node.func.attr in ['get_data', '_get_data']:
+                    if node.func.attr in ['_generic_getter', 'get_data', '_get_data']:
                         # Check if the table name is passed as a keyword argument
                         for keyword in node.keywords:
                             if keyword.arg == 'data_table':
