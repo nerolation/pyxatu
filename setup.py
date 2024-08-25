@@ -3,11 +3,12 @@ from setuptools.command.install import install
 import os
 from pathlib import Path
 import shutil
-import importlib.resources as resources
+import importlib.resources as resources  # Correctly handle file access
 
 class PostInstallCommand(install):
     """Post-installation for installation mode."""
     def run(self):
+        print("Running post-installation script...")
         install.run(self)
         self._copy_config_to_home()
 
@@ -16,10 +17,12 @@ class PostInstallCommand(install):
         home = Path.home()
         user_config_path = home / '.pyxatu_config.json'
 
-        # Dynamically load config.json from the pyxatu package
+        # Load config.json from the pyxatu package in site-packages
         try:
             print(f"Looking for config.json in the installed package...")
             default_config_file = resources.files('pyxatu') / 'config.json'
+            print(f"Config file found at: {default_config_file}")
+            
             if not user_config_path.exists():
                 shutil.copy(default_config_file, user_config_path)
                 print(f"Default configuration copied to {user_config_path}.")
@@ -28,14 +31,13 @@ class PostInstallCommand(install):
         except Exception as e:
             print(f"Error copying the configuration file: {e}")
 
-
 setup(
     name='pyxatu',
-    version='1.2',
+    version='1.3',
     packages=find_packages(),
     include_package_data=True,
     package_data={
-        'pyxatu': ['config.json'],
+        'pyxatu': ['config.json'],  # Ensure config.json is included
     },
     install_requires=[
         'requests',
