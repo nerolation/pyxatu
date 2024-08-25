@@ -3,7 +3,7 @@ from setuptools.command.install import install
 import os
 from pathlib import Path
 import shutil
-import importlib.resources
+import importlib.resources as resources
 
 class PostInstallCommand(install):
     """Post-installation for installation mode."""
@@ -18,18 +18,20 @@ class PostInstallCommand(install):
 
         # Dynamically load config.json from the pyxatu package
         try:
-            with importlib.resources.path('pyxatu', 'config.json') as default_config_path:
-                if not user_config_path.exists():
-                    shutil.copy(default_config_path, user_config_path)
-                    print(f"Default configuration copied to {user_config_path}. Please modify it with your actual credentials.")
-                else:
-                    print(f"User configuration already exists at {user_config_path}")
+            print(f"Looking for config.json in the installed package...")
+            default_config_file = resources.files('pyxatu') / 'config.json'
+            if not user_config_path.exists():
+                shutil.copy(default_config_file, user_config_path)
+                print(f"Default configuration copied to {user_config_path}.")
+            else:
+                print(f"User configuration already exists at {user_config_path}.")
         except Exception as e:
             print(f"Error copying the configuration file: {e}")
 
+
 setup(
     name='pyxatu',
-    version='1.1',
+    version='1.2',
     packages=find_packages(),
     include_package_data=True,
     package_data={
