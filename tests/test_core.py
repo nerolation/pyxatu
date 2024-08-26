@@ -3,6 +3,8 @@ from unittest.mock import patch, MagicMock
 from pyxatu.core import PyXatu
 import os
 import pandas as pd
+from pathlib import Path
+
 
 class TestPyXatu(unittest.TestCase):
 
@@ -48,11 +50,14 @@ class TestPyXatu(unittest.TestCase):
 
     @patch('pyxatu.core.PyXatu.read_clickhouse_config_locally', return_value=("http://test-url", "user", "pass"))
     def test_init_with_config_file(self, mock_read_config):
+        
+        default_path = os.path.join(Path.home(), '.pyxatu_config.json')
+        
         # Reset the mock before asserting
         self.mock_client.reset_mock()
 
         # Initialize PyXatu with config file
-        pyxatu_instance = PyXatu(config_path="config.json", use_env_variables=False)
+        pyxatu_instance = PyXatu(config_path=default_path, use_env_variables=False)
 
         # Ensure the config file method was called
         mock_read_config.assert_called_once()

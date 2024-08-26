@@ -1,6 +1,10 @@
 # PyXatu Configuration
 
-Pyxatu is a Python package for querying data from the [Xatu](https://ethpandaops.io/data/xatu/schema/) data base and was developed to make access to Ethereum data as easy as possible while sacrificing on a rich set of features.
+<img src="https://github.com/nerolation/pyxatu/blob/main/logo/pyxatu.png?raw=true" width="400">
+
+
+
+Pyxatu is a Python package for querying data from the [Xatu](https://ethpandaops.io/data/xatu/schema/) database and was developed to make access to Ethereum data as easy as possible without sacrificing on a rich set of features.
 
 ---
 
@@ -11,19 +15,19 @@ Pyxatu is a Python package for querying data from the [Xatu](https://ethpandaops
 
   ## Install
 
-  ```
+  ```console
    pip install pyxatu
+   pyxatu setup
    ```
 
-The default configuration file will be copied to your HOME directory as `pyxatu_config.json`. Please modify this file with your actual Xatu credentials.
+
+`xatu setup` copies the default configuration file to your HOME directory as `.pyxatu_config.json`. Update this file with your actual Xatu credentials. Alternatively, you can use environment variables.
 If you don't have credentials yet, please get in contact with someone from [EthPandaOps](https://ethpandaops.io/).
 
 ## Example Usage
 
-In the following, I want to provide a quick example.
 
-
-As a first step, we want to initialize PyXatu. 
+As a first step, we always want to initialize PyXatu. 
 **First, let's initialize Pyxatu**:
    ```python
    import pyxatu

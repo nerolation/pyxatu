@@ -54,18 +54,25 @@ class PyXatu:
         if not logging.getLogger().hasHandlers():
             logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s - %(levelname)s - %(message)s')
         
-        self.user_config_path = os.path.join(Path.home(), '.pyxatu_config.json')
+        default_path = os.path.join(Path.home(), '.pyxatu_config.json')
+        if not config_path is None and not os.path.isfile(default_path):
+            raise ValueError("~/.pyxatu_config.json file not found\nRun `xatu setup` to copy the default config file to your HOME directory and then add your credentials to it. Alternatively you can use environment variables.")
         
         if config_path is None:
-            config_path = self.user_config_path
-
-        self.config_path = config_path
+            self.config_path = default_path
+        else:
+            self.config_path = config_path
         
         if use_env_variables:
             config = self.read_clickhouse_config_from_env()
             self.clickhouse_url, self.clickhouse_user, self.clickhouse_password = config
         else:
-            self.clickhouse_url, self.clickhouse_user, self.clickhouse_password = self.read_clickhouse_config_locally()
+            print("Config Path: ", self.config_path)
+            print(os.path.isfile(self.config_path))
+            print(os.listdir("/home/devops/"))
+            assert os.path.isfile(self.config_path) == True, "Config file not found."
+            config = self.read_clickhouse_config_locally()
+            self.clickhouse_url, self.clickhouse_user, self.clickhouse_password = config
 
         logging.info(f"Clickhouse URL: {self.clickhouse_url}, User: {self.clickhouse_user}")
         self.client = ClickhouseClient(self.clickhouse_url, self.clickhouse_user, self.clickhouse_password)
@@ -211,6 +218,7 @@ class PyXatu:
         
         kwargs = {i: j for i, j in kwargs.items() if i != "columns"}
         kwargs["columns"] = "slot"
+        kwargs["limit"] = None
         missed = self.get_missed_slots( 
             **kwargs
         )
@@ -264,34 +272,12 @@ class PyXatu:
     
     def get_duties(
         self, 
-        slot: Optional[Union[int, List[int]]] = None, 
-        columns: Optional[str] = "*",               
-        where: Optional[str] = None, 
-        time_interval: Optional[str] = None,                
-        network: str = "mainnet", 
-        max_retries: int = 1, 
-        groupby: str = None, 
-        orderby: Optional[str] = None,              
-        final_condition: Optional[str] = None, 
-        limit: int = None,               
-        store_result_in_parquet: bool = None, 
-        custom_data_dir: str = None
+        columns: Optional[str] = "*",
+        **kwargs
     ) -> Any:
-        required_columns = ["slot", "validators"]
-        committee = self._get_data(
-            data_table='beacon_api_eth_v1_beacon_committee',
-            slot=slot, 
-            columns=self.clean_columns(columns, required_columns), 
-            where=where, 
-            time_interval=time_interval, 
-            network=network, 
-            groupby=groupby,
-            orderby=orderby,
-            final_condition=final_condition,
-            limit=limit,
-            store_result_in_parquet=store_result_in_parquet,
-            custom_data_dir=custom_data_dir
-        )
+        required_columns = ["slot", "validators"]            
+        kwargs["columns"] = self.clean_columns(columns, required_columns)
+        committee = self._generic_getter('beacon_api_eth_v1_beacon_committee', **kwargs)
         committee["validators"] = committee["validators"].apply(lambda x: eval(x))
         duties = pd.DataFrame(columns=["slot", "validators"])
         for i in committee.slot.unique():
@@ -338,52 +324,27 @@ class PyXatu:
     def get_elaborated_attestations(
         self, 
         slot: Optional[Union[int, List[int]]] = None, 
+        columns: str = "*",
         what: str = "source,target,head", 
-        columns: Optional[str] = "*", 
-        where: Optional[str] = None,     
-        time_interval: Optional[str] = None, 
-        network: str = "mainnet", 
-        max_retries: int = 1,    
-        groupby: str = None, 
-        orderby: Optional[str] = None, 
-        final_condition: Optional[str] = None,   
-        limit: int = None, 
-        store_result_in_parquet: bool = None, 
-        custom_data_dir: str = None, 
-        only_status: Optional[str] = "correct,failed,offline"
+        orderby: Optional[str] = "slot", 
+        only_status: Optional[str] = "correct,failed,offline",
+        **kwargs
     ) -> Any:
 
         if not isinstance(slot, list):
             slot = [slot, slot + 1]
-            
+        
         required_columns = ["slot", "source_root", "target_root", "validators", "beacon_block_root"]
-        attestations = self.get_attestation(
-            slot=[slot[0]//32 * 32, slot[-1]//32 * 32 + 32], 
-            columns=self.clean_columns(columns, required_columns),
-            where=where, 
-            time_interval=time_interval, 
-            network=network, 
-            groupby=groupby,
-            orderby=orderby,
-            final_condition=final_condition,
-            limit=limit,
-            store_result_in_parquet=store_result_in_parquet,
-            custom_data_dir=custom_data_dir
-        )
+        
+        kwargs["slot"] = [slot[0]//32 * 32, slot[-1]//32 * 32 + 32]
+        kwargs["columns"] = self.clean_columns(columns, required_columns)
+        kwargs["orderby"] = orderby
+        attestations = self.get_attestation(**kwargs)
 
-        duties = self.get_duties(
-            slot=[int(slot[0]//32 * 32), int(slot[-1]//32 * 32 + 32)], 
-            columns="slot, validators", 
-            where=where, 
-            time_interval=time_interval, 
-            network=network, 
-            groupby=groupby,
-            orderby="slot",
-            final_condition=final_condition,
-            limit=limit,
-            store_result_in_parquet=store_result_in_parquet,
-            custom_data_dir=custom_data_dir
-        ) 
+        kwargs["columns"] = "slot, validators"
+        kwargs["limit"] = None
+        kwargs["orderby"] = None
+        duties = self.get_duties(**kwargs) 
 
         # Initialize empty list to store all status data
         status_data = []
@@ -393,6 +354,7 @@ class PyXatu:
             head, target, source = self.get_checkpoints(_slot)
             _attestations = attestations[attestations["slot"] == _slot]
             _duties = duties[duties["slot"] == _slot]
+            assert len(_duties) > 0, "Something wrong with retrieving duties."
             _all = set(_duties.validators.tolist())
             voting_validators = set(_attestations.validators.tolist())
 
@@ -416,158 +378,38 @@ class PyXatu:
             if "head" in what:
                 process_vote("beacon_block", head)
 
-        final_df = pd.DataFrame(status_data, columns=["slot", "validator", "status", "vote_type"])
+        final_df = pd.DataFrame(status_data, columns=["slot", "validator", "status", "vote_type"]).sort_values("slot")
         final_df = final_df.drop_duplicates().reset_index(drop=True)
 
         return final_df  
  
-    def get_beacon_block_v2(
-        self, 
-        slots: List[int] = None, 
-        columns: Optional[str] = "*", 
-        where: Optional[str] = None, 
-        time_interval: Optional[str] = None, 
-        network: str = "mainnet", 
-        max_retries: int = 1, 
-        groupby: str = None, 
-        orderby: Optional[str] = None,
-        final_condition: Optional[str] = None, 
-        limit: int = None, 
-        store_result_in_parquet: bool = None, 
-        custom_data_dir: str = None
-    ) -> Any:
-        block = self._get_data(
-            data_table='beacon_api_eth_v2_beacon_block',
-            slot=slots, 
-            columns=columns,
-            where=where, 
-            time_interval=time_interval, 
-            network=network, 
-            groupby=groupby,
-            orderby=orderby,
-            final_condition=final_condition,
-            limit=limit,
-            store_result_in_parquet=store_result_in_parquet,
-            custom_data_dir=custom_data_dir
-        )
+    def get_beacon_block_v2(self, **kwargs) -> Any:
+        block = self._generic_getter('beacon_api_eth_v2_beacon_block', **kwargs)
         return block
 
-    def get_block_size(
-        self, 
-        slots: List[int], 
-        columns: Optional[str] = "*", 
-        where: Optional[str] = None, 
-        time_interval: Optional[str] = None, 
-        network: str = "mainnet", 
-        max_retries: int = 1, 
-        groupby: str = None, 
-        orderby: Optional[str] = None, 
-        final_condition: Optional[str] = None, 
-        limit: int = None,      
-        store_result_in_parquet: bool = None, 
-        custom_data_dir: str = None, 
-        add_missed: bool = True
-    ) -> Any:
+    def get_block_size(self, orderby: Optional[str] = "slot", **kwargs) -> Any:
         if isinstance(slots, int):
             slots = [slots, slots+1]
         if columns == None:
             columns = []
-        sizes = self.get_slots( 
-            slot=[slots[0], slots[-1]] if isinstance(slots, list) else slots, 
-            columns= self.clean_columns(
-                columns, 
-                ["slot", "block_total_bytes_compressed", "block_total_bytes", "execution_payload_blob_gas_used"]
-            ),
-            where=where,
-            time_interval=time_interval, 
-            network=network, 
-            orderby="slot",
-            groupby=groupby,
-            final_condition=final_condition,
-            limit=limit,
-            store_result_in_parquet=store_result_in_parquet,
-            custom_data_dir=custom_data_dir,
-            add_missed=add_missed
-        ) 
+            
+        required_columns = ["slot", "block_total_bytes_compressed", "block_total_bytes", "execution_payload_blob_gas_used"]
+        kwargs["slot"] = [slots[0], slots[-1]] if isinstance(slots, list) else slots
+        kwargs["columns"] = self.clean_columns(columns, required_columns)
+        
+        sizes = self.get_slots(**kwargs) 
         if "execution_payload_blob_gas_used" in sizes.columns:
             sizes["blobs"] = sizes["execution_payload_blob_gas_used"] // 131072
             sizes.drop("execution_payload_blob_gas_used", axis=1, inplace=True)
         return sizes
     
-    def get_blob_events(
-        self, 
-        slot: Optional[Union[int, List[int]]] = None, 
-        columns: Optional[str] = "*", 
-        where: Optional[str] = None, 
-        time_interval: Optional[str] = None, 
-        network: str = "mainnet", 
-        max_retries: int = 1, 
-        groupby: str = None, 
-        orderby: Optional[str] = None,
-        final_condition: Optional[str] = None, 
-        limit: int = None, 
-        store_result_in_parquet: bool = None, 
-        custom_data_dir: str = None
-    ) -> Any:
-        return self._get_data(
-            data_table='beacon_api_eth_v1_events_blob_sidecar',
-            slot=slot, 
-            columns=columns, 
-            where=where, 
-            time_interval=time_interval,
-            network=network, 
-            groupby=groupby,
-            orderby=orderby,
-            final_condition=final_condition,
-            limit=limit,
-            store_result_in_parquet=store_result_in_parquet,
-            custom_data_dir=custom_data_dir
-        )
+    def get_blob_events(self, **kwargs) -> Any:
+        return self._generic_getter('beacon_api_eth_v1_events_blob_sidecar', **kwargs)
     
-    def get_blobs(
-        self, 
-        slot: Optional[Union[int, List[int]]] = None, 
-        columns: Optional[str] = "*", 
-        where: Optional[str] = None, 
-        time_interval: Optional[str] = None, 
-        network: str = "mainnet", 
-        max_retries: int = 1, groupby: str = None, 
-        orderby: Optional[str] = None,
-        final_condition: Optional[str] = None, 
-        limit: int = None, 
-        store_result_in_parquet: bool = None, 
-        custom_data_dir: str = None
-    ) -> Any:
-        return self._get_data(
-            data_table='canonical_beacon_blob_sidecar',
-            slot=slot, 
-            columns=columns, 
-            where=where, 
-            time_interval=time_interval,
-            network=network, 
-            groupby=groupby,
-            orderby=orderby,
-            final_condition=final_condition,
-            limit=limit,
-            store_result_in_parquet=store_result_in_parquet,
-            custom_data_dir=custom_data_dir
-        )
+    def get_blobs(self, **kwargs) -> Any:
+        return self._generic_getter('canonical_beacon_blob_sidecar', **kwargs)
  
-    def get_withdrawals(
-        self, 
-        slot: Optional[Union[int, List[int]]] = None, 
-        columns: Optional[str] = "*", 
-        where: Optional[str] = None, 
-        time_interval: Optional[str] = None, 
-        network: str = "mainnet", 
-        max_retries: int = 1, 
-        groupby: str = None, 
-        orderby: Optional[str] = None,
-        final_condition: Optional[str] = None, 
-        limit: int = None, 
-        store_result_in_parquet: bool = None, 
-        custom_data_dir: str = None
-    ) -> Any:
+    def get_withdrawals(self, **kwargs) -> Any:
         """
         Retrieve withdrawal data for a given slot.
 
@@ -600,21 +442,8 @@ class PyXatu:
 
         Available columns (documentation only):
         """
-        return self._get_data(
-            data_table='canonical_beacon_block_withdrawal',
-            slot=slot, 
-            columns=columns, 
-            where=where, 
-            time_interval=time_interval,
-            network=network, 
-            groupby=groupby,
-            orderby=orderby,
-            final_condition=final_condition,
-            limit=limit,
-            store_result_in_parquet=store_result_in_parquet,
-            custom_data_dir=custom_data_dir
-        )
-    
+        return self._generic_getter('canonical_beacon_block_withdrawal', **kwargs)
+
     def create_method_table_mapping(self):
         """
         Dynamically creates the method-to-table mapping by inspecting each method
