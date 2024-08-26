@@ -1,4 +1,4 @@
-# PyXatu Configuration
+# PyXatu
 
 <img src="https://github.com/nerolation/pyxatu/blob/main/logo/pyxatu.png?raw=true" width="400">
 
