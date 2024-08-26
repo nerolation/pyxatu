@@ -28,7 +28,6 @@ If you don't have credentials yet, please get in contact with someone from [EthP
 
 
 As a first step, we always want to initialize PyXatu. 
-**First, let's initialize Pyxatu**:
    ```python
    import pyxatu
 

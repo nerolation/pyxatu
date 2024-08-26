@@ -68,8 +68,6 @@ class PyXatu:
             self.clickhouse_url, self.clickhouse_user, self.clickhouse_password = config
         else:
             print("Config Path: ", self.config_path)
-            print(os.path.isfile(self.config_path))
-            print(os.listdir("/home/devops/"))
             assert os.path.isfile(self.config_path) == True, "Config file not found."
             config = self.read_clickhouse_config_locally()
             self.clickhouse_url, self.clickhouse_user, self.clickhouse_password = config
@@ -169,7 +167,6 @@ class PyXatu:
             if arg in argument_types:
                 types_list.append(argument_types[arg])
             else:
-                print(arg)
                 (f"Argument '{arg}' is not recognized.")
 
         return types_list
