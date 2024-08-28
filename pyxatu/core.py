@@ -325,22 +325,25 @@ class PyXatu:
         what: str = "source,target,head", 
         orderby: Optional[str] = "slot", 
         only_status: Optional[str] = "correct,failed,offline",
+        add_inclusion_delay: bool = True,
         **kwargs
     ) -> Any:
 
         if not isinstance(slot, list):
             slot = [slot, slot + 1]
         
-        required_columns = ["slot", "source_root", "target_root", "validators", "beacon_block_root"]
+        required_columns = ["slot", "block_slot", "source_root", "target_root", "validators", "beacon_block_root"]
         
         kwargs["slot"] = [slot[0]//32 * 32, slot[-1]//32 * 32 + 32]
         kwargs["columns"] = self.clean_columns(columns, required_columns)
         kwargs["orderby"] = orderby
+        
         attestations = self.get_attestation(**kwargs)
 
         kwargs["columns"] = "slot, validators"
         kwargs["limit"] = None
         kwargs["orderby"] = None
+        
         duties = self.get_duties(**kwargs) 
 
         # Initialize empty list to store all status data
@@ -354,6 +357,21 @@ class PyXatu:
             assert len(_duties) > 0, "Something wrong with retrieving duties."
             _all = set(_duties.validators.tolist())
             voting_validators = set(_attestations.validators.tolist())
+            
+            df_delay = None
+            if add_inclusion_delay:
+                #df_delay =  _attestations[_attestations["validators"].isin(failing_validators)]
+                df_delay = _attestations[["validators", "slot", "block_slot"]].drop_duplicates().dropna()
+                df_delay["delay"] = df_delay["block_slot"] - df_delay["slot"]
+                df_delay = df_delay[["delay", "validators"]].set_index("validators").to_dict()["delay"]
+                final_columns=["slot", "validator", "status", "vote_type", "inclusion_delay"]
+            else:
+                final_columns=["slot", "validator", "status", "vote_type"]
+
+            def get_delay(v: str):
+                if v not in df_delay.keys():
+                    return None
+                return df_delay.get(v)
 
             def process_vote(vote_type: str, root_value: str) -> None:
                 correct = set(_attestations.loc[_attestations[f"{vote_type}_root"] == root_value, 'validators'])
@@ -362,11 +380,11 @@ class PyXatu:
                 offline_validators = _all - voting_validators
                 
                 if "correct" in only_status:
-                    status_data.extend([(_slot, v, "correct", vote_type) for v in correct])
+                    status_data.extend([(_slot, v, "correct", vote_type, get_delay(v)) for v in correct])
                 if "failed" in only_status:
-                    status_data.extend([(_slot, v, "failed", vote_type) for v in failing_validators])
+                    status_data.extend([(_slot, v, "failed", vote_type, get_delay(v)) for v in failing_validators])
                 if "offline" in only_status:
-                    status_data.extend([(_slot, v, "offline", vote_type) for v in offline_validators])
+                    status_data.extend([(_slot, v, "offline", vote_type, get_delay(v)) for v in offline_validators])      
 
             if "source" in what:
                 process_vote("source", source)
@@ -375,7 +393,7 @@ class PyXatu:
             if "head" in what:
                 process_vote("beacon_block", head)
 
-        final_df = pd.DataFrame(status_data, columns=["slot", "validator", "status", "vote_type"]).sort_values("slot")
+        final_df = pd.DataFrame(status_data, columns=final_columns).sort_values("slot")
         final_df = final_df.drop_duplicates().reset_index(drop=True)
 
         return final_df  
@@ -591,6 +609,8 @@ class PyXatu:
         else:
             return True
         for c in [i for i in columns.split(",") if i != ""]:
+            if " as " in c:
+                c = c.split(" as ")[0].strip()
             _c = self.helpers.extract_inside_brackets(c.strip())
             if _c not in existing_columns:
                 if _c == "" or _c == " ":

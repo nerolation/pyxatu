@@ -22,9 +22,9 @@ class PyXatuHelpers:
         return (ts - self.get_slot_timestamp(slot = slot)*1000)/1000
     
     def date_string_to_timestamp(self, date_string: str):
-        dt_obj = datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S.%f')
+        dt_obj = datetime.strptime(date_string, '%Y-%m-%d %H:%M:%S.%f')
         utc_timestamp = dt_obj.timestamp()
-        returnutc_timestamp
+        return utc_timestamp
         
     def slot_to_time(self, slot: int, _format="%Y-%m-%d %H:%M:%S"):
         """Convert a slot number to a formatted time string."""
