@@ -108,7 +108,7 @@ class PyXatu:
         logging.info("Clickhouse configs set")
         return url, clickhouse_user, clickhouse_password
     
-    def execute_query(self, query: str, columns: Optional[str] = "*", time_interval: Optional[str] = None) -> Any:
+    def execute_query(self, query: str, columns: Optional[str] = "*", time_interval: Optional[str] = None, handle_columns: bool = False) -> Any:
         return self.client.execute_query(query, columns)
     
     @property
@@ -157,7 +157,9 @@ class PyXatu:
             "limit": [int, type(None)],
             "store_result_in_parquet": [bool, type(None)],
             "custom_data_dir": [str, type(None)],
-            "add_final_keyword_to_query": [bool, type(None)]
+            "add_final_keyword_to_query": [bool, type(None)],
+            "time_column": [str, type(None)],
+            "no_slot_filter": [bool, type(None)]
         }
 
         types_list = []
@@ -174,6 +176,7 @@ class PyXatu:
     
     @column_check_decorator
     def _get_data(self, *args, **kwargs):
+        print(kwargs.values() ,kwargs.keys(), self._get_types(kwargs.keys()))
         self.helpers.check_types(kwargs.values(), self._get_types(kwargs.keys()))
         return self.data_retriever.get_data(*args, **kwargs)
 
@@ -423,6 +426,29 @@ class PyXatu:
     
     def get_blobs(self, **kwargs) -> Any:
         return self._generic_getter('canonical_beacon_blob_sidecar', **kwargs)
+    
+    def get_transactions(self, **kwargs) -> Any:
+        return self._generic_getter('canonical_beacon_block_execution_transaction', **kwargs)
+    
+    def get_mempool(self, **kwargs) -> Any:
+        if isinstance(kwargs["slot"], list):
+            kwargs["slot"] = [kwargs["slot"][0] - 32*100, kwargs["slot"][-1]]
+        elif isinstance(kwargs["slot"], int):
+            kwargs["slot"] = [kwargs["slot"] - 32*100, kwargs["slot"]]
+        required_columns = ["event_date_time"]
+        kwargs["columns"] = self.clean_columns(kwargs["columns"], required_columns)
+        
+        kwargs["time_column"] = "event_date_time"
+        kwargs["no_slot_filter"] = True
+        return self._generic_getter('mempool_transaction', **kwargs)
+                              
+    def get_elaborated_transactions(self, **kwargs) -> Any:
+        transactions = self.get_transactions(**kwargs)
+        required_columns = ["hash"]
+        kwargs["columns"] = self.clean_columns(kwargs["columns"], required_columns)
+        mempool = self.get_mempool(**kwargs)
+        transactions["private"] = transactions["hash"].apply(lambda x: x.lower() in set(mempool.hash))
+        return transactions
  
     def get_withdrawals(self, **kwargs) -> Any:
         """

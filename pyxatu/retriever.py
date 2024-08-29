@@ -8,34 +8,18 @@ class DataRetriever:
         self.client = client
         self.tables = tables
 
-    def get_data(self, data_table: str, slot: Optional[int] = None, columns: str = "*", 
-                 where: Optional[str] = None, time_interval: Optional[str] = None, network: str = "mainnet", 
-                 groupby: str = None, orderby: Optional[str] = None, final_condition: Optional[str] = None, 
-                 limit: int = None, store_result_in_parquet: bool = None, custom_data_dir: str = None,
-                 add_final_keyword_to_query: bool = True) -> Any:
-        if columns != "*" and isinstance(columns, list):
-            columns = ",".join(columns)
-        table = self.tables.get(data_table)
+    def get_data(self, **kwargs) -> Any:
+        if kwargs["columns"] != "*" and isinstance(kwargs["columns"], list):
+            kwargs["columns"] = ",".join(kwargs["columns"])
+        table = self.tables.get(kwargs["data_table"])
         if not table:
             raise ValueError(
-                f"Data table '{data_table}' is not valid. Please use one of the following: {', '.join(self.tables.keys())}"
+                f"Data table '{kwargs['data_table']}' is not valid. Please use one of the following: {', '.join(self.tables.keys())}"
             )
-        result = self.client.fetch_data(
-            table=table, 
-            slot=slot, 
-            columns=columns, 
-            where=where, 
-            time_interval=time_interval, 
-            network=network, 
-            groupby=groupby, 
-            orderby=orderby, 
-            final_condition=final_condition,
-            limit=limit,
-            add_final_keyword_to_query=add_final_keyword_to_query
-        )
+        result = self.client.fetch_data(**kwargs)
         if not result is None:
-            if store_result_in_parquet:
-                self.store_result_to_disk(result, custom_data_dir)
+            if "store_result_in_parquet" in kwargs and kwargs["store_result_in_parquet"]:
+                self.store_result_to_disk(result, kwargs["custom_data_dir"])
             else:
                 return result
 
