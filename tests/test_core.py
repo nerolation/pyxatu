@@ -75,7 +75,7 @@ class TestPyXatu(unittest.TestCase):
 
         # Assert that DataRetriever.get_data was called with correct arguments
         self.mock_retriever_instance.get_data.assert_called_once_with(
-            'beacon_api_eth_v1_events_block',
+            data_table='beacon_api_eth_v1_events_block',
             slot=12345,
         )
         self.assertEqual(result, 'mock_result')

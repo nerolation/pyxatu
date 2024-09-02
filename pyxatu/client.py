@@ -18,7 +18,7 @@ class ClickhouseClient:
         self.helpers = helper or PyXatuHelpers()
 
     @retry_on_failure()
-    def execute_query(self, query: str, columns: Optional[str] = "*") -> pd.DataFrame:
+    def execute_query(self, query: str, columns: Optional[str] = "*", handle_columns: bool = False) -> pd.DataFrame:
         logging.info(f"Executing query: {query}")
         start_time = time.time()
         response = requests.get(
@@ -29,15 +29,17 @@ class ClickhouseClient:
         )
         logging.info(f"Query executed in {time.time() - start_time:.2f} seconds")
         response.raise_for_status()
-        if "DISTINCT" in query.upper():
-            potential_columns = query.split("FROM")[0].split("DISTINCT")[1].strip()
+        if handle_columns:
+            if "DISTINCT" in query.upper():
+                potential_columns = query.split("FROM")[0].split("DISTINCT")[1].strip()
+            else:
+                potential_columns = query.split("FROM")[0].split("SELECT")[1].strip()
+            if potential_columns != "*" and "," in potential_columns:
+                potential_columns = ",".join([i.split("as ")[-1].strip() if "as " in i else i.strip() for i in potential_columns.split(",")])
+            elif potential_columns != "*":
+                potential_columns = [i.split("as ")[-1].strip() if "as " in i else i.strip() for i in [potential_columns]] 
         else:
-            potential_columns = query.split("FROM")[0].split("SELECT")[1].strip()
-        if potential_columns != "*" and "," in potential_columns:
-            potential_columns = ",".join([i.split("as ")[-1].strip() if "as " in i else i.strip() for i in potential_columns.split(",")])
-        elif potential_columns != "*":
-            potential_columns = [i.split("as ")[-1].strip() if "as " in i else i.strip() for i in [potential_columns]] 
-            
+            potential_columns = None
         if response.text == "":
             logging.info("No data for query")
             return None
@@ -56,12 +58,13 @@ class ClickhouseClient:
             
         return df
 
-    def fetch_data(self, table: str, slot: Optional[int] = None, columns: str = '*', where: Optional[str] = None,
+    def fetch_data(self, data_table: str, slot: Optional[int] = None, columns: str = '*', where: Optional[str] = None,
                    time_interval: Optional[str] = None, network: str = "mainnet", groupby: Optional[str] = None,
                    orderby: Optional[str] = None, final_condition: Optional[str] = None, limit: int = None,
-                   add_final_keyword_to_query: bool = True) -> pd.DataFrame:
+                   add_final_keyword_to_query: bool = True, time_column: str = "slot_start_date_time",
+                   no_slot_filter: bool = False) -> pd.DataFrame:
         query = self._build_query(
-            table = table, 
+            data_table = data_table, 
             slot = slot, 
             columns = columns, 
             where = where, 
@@ -71,29 +74,34 @@ class ClickhouseClient:
             orderby = orderby, 
             final_condition = final_condition,
             limit = limit,
-            add_final_keyword_to_query=add_final_keyword_to_query
+            add_final_keyword_to_query=add_final_keyword_to_query,
+            time_column=time_column,
+            no_slot_filter=no_slot_filter
         )
         return self.execute_query(query, columns)
 
-    def _build_query(self, table: str, slot: Optional[int], columns: str, where: Optional[str], 
+    def _build_query(self, data_table: str, slot: Optional[int], columns: str, where: Optional[str], 
                      time_interval: Optional[str], network: str,  groupby: Optional[str], orderby: Optional[str], 
-                     final_condition: Optional[str], limit: int = None, add_final_keyword_to_query: bool = True) -> str:
-        query = f"SELECT DISTINCT {columns} FROM {table}"
+                     final_condition: Optional[str], limit: int = None, add_final_keyword_to_query: bool = True,
+                     time_column: str = "slot_start_date_time", no_slot_filter: bool = False) -> str:
+        query = f"SELECT DISTINCT {columns} FROM {data_table}"
         if add_final_keyword_to_query:
             query += " FINAL"
         conditions = []
         
         if isinstance(slot, int):
-            date_filter = self._get_sql_date_filter(slot=slot)
+            date_filter = self.helpers.get_sql_date_filter(slot=slot, time_column=time_column)
             conditions.append(date_filter)
-            conditions.append(f"slot = {int(slot)}")
+            if not no_slot_filter:
+                conditions.append(f"slot = {int(slot)}")
         elif slot and isinstance(slot, list) and len(slot) == 2:
-            date_filter = self._get_sql_date_filter(slot=slot)
+            date_filter = self.helpers.get_sql_date_filter(slot=slot, time_column=time_column)
             conditions.append(date_filter)
-            conditions.append(f"slot >= {int(slot[0])} AND slot < {int(slot[1])}")
+            if not no_slot_filter: 
+                conditions.append(f"slot >= {int(slot[0])} AND slot < {int(slot[1])}")
         
         if where: conditions.append(where)
-        if time_interval: conditions.append(f"slot_start_date_time > NOW() - INTERVAL '{time_interval}'")
+        if time_interval: conditions.append(f"{time_column} > NOW() - INTERVAL '{time_interval}'")
         if network: conditions.append(f"meta_network_name = '{network}'")
         if final_condition: conditions.append(final_condition)
         
@@ -105,35 +113,3 @@ class ClickhouseClient:
         if limit: query += f" LIMIT {limit}"
         
         return query
-    
-    def _get_sql_date_filter(self, slot: Optional[int] = None) -> str:
-        """
-        Returns a SQL-compatible date filter for a given Ethereum PoS slot or a range of slots.
-        This is useful to minimize the amount of requested resources on the Xatu backend.
-
-        Args:
-            slot (Optional[int]): A single slot number to calculate the date for.
-            slots (Optional[List[int]]): A list of two slot numbers to create a range filter.
-
-        Returns:
-            str: A SQL date filter in the format 'YYYY-MM-DD HH:MM:SS' or a range of timestamps.
-
-        Raises:
-            ValueError: If neither a valid `slot` nor a valid list of `slots` is provided.
-        """
-        # Case 1: Single slot provided (it must be an integer)
-        if isinstance(slot, int):
-            slot_date_str = self.helpers.get_slot_datetime(slot)
-            slot_date_str_n = self.helpers.get_slot_datetime(slot+1)
-            
-            return f"slot_start_date_time >= '{slot_date_str}' AND slot_start_date_time < '{slot_date_str_n}'"
-
-        # Case 2: List of two slots provided (must be a list of exactly two integers)
-        elif isinstance(slot, list) and len(slot) == 2 and all(isinstance(s, int) for s in slot):
-            lower_slot_date_str = self.helpers.get_slot_datetime(slot[0])
-            upper_slot_date_str = self.helpers.get_slot_datetime(slot[1])
-            return f"slot_start_date_time >= '{lower_slot_date_str}' AND slot_start_date_time < '{upper_slot_date_str}'"
-
-        else:
-            print(slot)
-            raise ValueError(f"Invalid input: either a valid integer slot or a list of exactly two slots must be provided. Provided input type: {type(slot)}, Slot variable contains: {str(slot)}")

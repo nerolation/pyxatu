@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='pyxatu',
-    version='1.5',
+    version='1.7',
     packages=find_packages(),
     include_package_data=True,
     package_data={
@@ -15,7 +15,8 @@ setup(
         'bs4',
         'termcolor',
         'fastparquet',
-        'click'
+        'click',
+        'tabulate'
     ],
     entry_points={
         'console_scripts': [

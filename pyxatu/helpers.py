@@ -2,6 +2,7 @@ import re
 import time
 from datetime import datetime, timezone
 from typing import List
+from typing import Optional
 
 from pyxatu.utils import CONSTANTS
 
@@ -69,3 +70,35 @@ class PyXatuHelpers:
                 print(f"{type(value)} != {expected_type}")
                 return False
         return True
+    
+    def get_sql_date_filter(self, slot: Optional[int] = None, time_column: str = "slot_start_date_time") -> str:
+        """
+        Returns a SQL-compatible date filter for a given Ethereum PoS slot or a range of slots.
+        This is useful to minimize the amount of requested resources on the Xatu backend.
+
+        Args:
+            slot (Optional[int]): A single slot number to calculate the date for.
+            slots (Optional[List[int]]): A list of two slot numbers to create a range filter.
+
+        Returns:
+            str: A SQL date filter in the format 'YYYY-MM-DD HH:MM:SS' or a range of timestamps.
+
+        Raises:
+            ValueError: If neither a valid `slot` nor a valid list of `slots` is provided.
+        """
+        # Case 1: Single slot provided (it must be an integer)
+        if isinstance(slot, int):
+            slot_date_str = self.get_slot_datetime(slot)
+            slot_date_str_n = self.get_slot_datetime(slot+1)
+            
+            return f"{time_column} >= '{slot_date_str}' AND {time_column} < '{slot_date_str_n}'"
+
+        # Case 2: List of two slots provided (must be a list of exactly two integers)
+        elif isinstance(slot, list) and len(slot) == 2 and all(isinstance(s, int) for s in slot):
+            lower_slot_date_str = self.get_slot_datetime(slot[0])
+            upper_slot_date_str = self.get_slot_datetime(slot[1])
+            return f"{time_column} >= '{lower_slot_date_str}' AND {time_column} < '{upper_slot_date_str}'"
+
+        else:
+            print(slot)
+            raise ValueError(f"Invalid input: either a valid integer slot or a list of exactly two slots must be provided. Provided input type: {type(slot)}, Slot variable contains: {str(slot)}")
