@@ -26,17 +26,9 @@ class TestDataRetriever(unittest.TestCase):
 
         # Use keyword arguments to match the actual call in `get_data`
         self.client.fetch_data.assert_called_once_with(
-            table="test_table", 
+            data_table="valid_data_table", 
             slot=1234, 
             columns="col1,col2", 
-            where=None, 
-            time_interval=None, 
-            network="mainnet", 
-            groupby=None,
-            orderby=None, 
-            final_condition=None, 
-            limit=None,
-            add_final_keyword_to_query=True
         )
 
         # Ensure the result is as expected

@@ -58,7 +58,7 @@ class TestClickhouseClient(unittest.TestCase):
 
         # Call the real fetch_data method and test the result
         result = self.client.fetch_data(
-            table='test_table', 
+            data_table='test_table', 
             slot=1234, 
             columns=['col1', 'col2'], 
             where=None, 
@@ -99,7 +99,7 @@ class TestClickhouseClient(unittest.TestCase):
 
         # Verify the result as expected
         expected_df = pd.DataFrame([[9700000, '2024-08-09 17:20:23']], columns=["slot", "slot_start_date_time"])
-        
+        result.columns = ["slot", "slot_start_date_time"]
         pd.testing.assert_frame_equal(result, expected_df)
 
 

@@ -9,7 +9,7 @@ class DataRetriever:
         self.tables = tables
 
     def get_data(self, **kwargs) -> Any:
-        if kwargs["columns"] != "*" and isinstance(kwargs["columns"], list):
+        if "columns" in kwargs and kwargs["columns"] != "*" and isinstance(kwargs["columns"], list):
             kwargs["columns"] = ",".join(kwargs["columns"])
         table = self.tables.get(kwargs["data_table"])
         if not table:

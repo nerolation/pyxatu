@@ -19,6 +19,7 @@ from pyxatu.utils import CONSTANTS
 from pyxatu.helpers import PyXatuHelpers
 from pyxatu.docscraper import DocsScraper
 from pyxatu.client import ClickhouseClient
+from pyxatu.mempoolconnector import MempoolConnector
 from pyxatu.retriever import DataRetriever
 from pyxatu.validators import ValidatorGadget
 from pyxatu.relayendpoint import MevBoostCaller
@@ -116,6 +117,12 @@ class PyXatu:
         if not hasattr(self, '_validators'):
             self._validators = ValidatorGadget()
         return self._validators
+    
+    @property
+    def mempool(self):
+        if not hasattr(self, '_mempool'):
+            self._mempool = MempoolConnector()
+        return self._mempool
     
     @property
     def docs(self):
@@ -444,10 +451,35 @@ class PyXatu:
                               
     def get_elaborated_transactions(self, **kwargs) -> Any:
         transactions = self.get_transactions(**kwargs)
-        required_columns = ["hash"]
-        kwargs["columns"] = self.clean_columns(kwargs["columns"], required_columns)
-        mempool = self.get_mempool(**kwargs)
-        transactions["private"] = transactions["hash"].apply(lambda x: x.lower() in set(mempool.hash))
+        kwargs["columns"] = ["hash"]
+        
+        if isinstance(kwargs["slot"], int):
+            kwargs["slot"] = [kwargs["slot"]]
+        
+        slots = kwargs["slot"]
+        mempool_hash_set = set()
+        
+        for slot in slots:
+            kwargs["slot"] = slot
+            xatu_data = self.get_mempool(**kwargs)
+            xatu_data = set(xatu_data["hash"].str.lower())
+            
+            blocknative_data = self.mempool.download_blocknative_mempool_data(self.helpers.slot_to_time(kwargs["slot"]))
+            flashbots_data = self.mempool.download_flashbots_mempool_data(self.helpers.slot_to_time(kwargs["slot"]))
+
+            blocknative_data = set(blocknative_data[blocknative_data["status"] != "confirmed"].hash.unique().tolist())
+            flashbots_data = set(flashbots_data["hash"])
+
+            logging.info(f"Transactions found in Xatu mempool: {len(xatu_data.intersection(set(transactions['hash'])))}")
+            logging.info(f"Transactions found in Blocknative data: {len(blocknative_data.intersection(set(transactions['hash'])))}")
+            logging.info(f"Transactions found in Flashbots data: {len(flashbots_data.intersection(set(transactions['hash'])))}")
+
+            mempool_hash_set = mempool_hash_set.union(xatu_data)
+            mempool_hash_set = mempool_hash_set.union(blocknative_data)
+            mempool_hash_set = mempool_hash_set.union(flashbots_data)
+
+            logging.info(f"Total transactions found: {len(mempool_hash_set)}")
+        transactions["private"] = ~transactions["hash"].str.lower().isin(mempool_hash_set)
         return transactions
  
     def get_withdrawals(self, **kwargs) -> Any:
@@ -647,8 +679,9 @@ class PyXatu:
         return True
     
     def clean_columns(self, columns: str, required_columns: List[str]) -> str:
-        columns_list = [i.strip() for i in columns.split(",") if i != "*"]
-        return ",".join(list(dict.fromkeys(columns_list + required_columns)))
+        if isinstance(columns, str):
+            columns = [i.strip() for i in columns.split(",") if i != "*"]
+        return ",".join(list(dict.fromkeys(columns + required_columns)))
 
     def preview_result(self, func: Callable[..., Any], limit: int = 100, **kwargs) -> Any:
         kwargs['limit'] = limit
