@@ -36,6 +36,9 @@ class PyXatuHelpers:
     def slot_to_day(self, slot: int):
         return self.slot_to_time(slot, "%Y-%m-%d")
     
+    def slot_to_hour(self, slot: int):
+        return self.slot_to_time(slot, "%Y-%m-%d %H:00:00")
+    
     def get_current_ethereum_slot(self):
         current_timestamp = int(time.time()) - 64*12
         slot_number_at_known_timestamp = 8000000
@@ -47,7 +50,9 @@ class PyXatuHelpers:
     def extract_inside_brackets(self, input_string: str = None):
         match = re.search(r'\((.*?)\)', input_string)
         if match:
-            return match.group(1)
+            bracket_content = match.group(1)
+            cleaned_content = re.sub(r'[^a-zA-Z\_]', '', bracket_content)
+            return cleaned_content
         else:
             return input_string
 
