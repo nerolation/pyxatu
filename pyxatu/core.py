@@ -137,8 +137,16 @@ class PyXatu:
         if table_name in self.method_table_mapping.keys():
             table_name = self.method_table_mapping[table_name]
         if print_loading:
-            print(f"Retrieving schema for table {table_name}")
+            logging.info(f"Retrieving schema for table {table_name}")
         return self.docs.get_table_info(table_name)
+    
+    def get_columns(self, table_name: str = None):
+        return self.execute_query(f"""
+            SELECT name
+            FROM system.columns
+            WHERE table = '{table_name}'
+              AND database = 'default'
+        """)
     
     def _get_types(self, arguments: List[str]) -> List[type]:
         """
@@ -183,7 +191,6 @@ class PyXatu:
     
     @column_check_decorator
     def _get_data(self, *args, **kwargs):
-        print(kwargs.values() ,kwargs.keys(), self._get_types(kwargs.keys()))
         self.helpers.check_types(kwargs.values(), self._get_types(kwargs.keys()))
         return self.data_retriever.get_data(*args, **kwargs)
 
@@ -413,17 +420,20 @@ class PyXatu:
         return block
 
     def get_block_size(self, orderby: Optional[str] = "slot", **kwargs) -> Any:
-        if isinstance(slots, int):
-            slots = [slots, slots+1]
-        if columns == None:
-            columns = []
+        if isinstance(kwargs["slot"], int):
+            kwargs["slot"] = [kwargs["slot"], kwargs["slot"]+1]
+        if not "columns" in kwargs:
+            kwargs["columns"] = []
             
-        required_columns = ["slot", "block_total_bytes_compressed", "block_total_bytes", "execution_payload_blob_gas_used"]
-        kwargs["slot"] = [slots[0], slots[-1]] if isinstance(slots, list) else slots
-        kwargs["columns"] = self.clean_columns(columns, required_columns)
+        required_columns = ["slot", "block_total_bytes_compressed", "block_total_bytes", "execution_payload_blob_gas_used", "execution_payload_transactions_total_bytes", "execution_payload_transactions_total_bytes_compressed"]
+        kwargs["slot"] = [kwargs["slot"][0], kwargs["slot"][-1]] if isinstance(kwargs["slot"], list) else kwargs["slot"]
+        kwargs["columns"] = self.clean_columns(kwargs["columns"], required_columns)
         
         sizes = self.get_slots(**kwargs) 
         if "execution_payload_blob_gas_used" in sizes.columns:
+            sizes = sizes[sizes["execution_payload_blob_gas_used"] != "\\N"]
+            sizes = sizes[sizes["execution_payload_blob_gas_used"] != "missed"]
+            sizes["execution_payload_blob_gas_used"] = sizes["execution_payload_blob_gas_used"].astype(int)
             sizes["blobs"] = sizes["execution_payload_blob_gas_used"] // 131072
             sizes.drop("execution_payload_blob_gas_used", axis=1, inplace=True)
         return sizes
@@ -436,6 +446,9 @@ class PyXatu:
     
     def get_transactions(self, **kwargs) -> Any:
         return self._generic_getter('canonical_beacon_block_execution_transaction', **kwargs)
+    
+    def get_el_transactions(self, **kwargs) -> Any:
+        return self._generic_getter('canonical_execution_transaction', **kwargs)
     
     def get_mempool(self, **kwargs) -> Any:
         if isinstance(kwargs["slot"], list):
