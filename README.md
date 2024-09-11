@@ -17,7 +17,7 @@ Pyxatu is a Python package for querying data from the [Xatu](https://ethpandaops
 
   ```console
    pip install pyxatu
-   pyxatu setup
+   xatu setup
    ```
 
 
