@@ -17,7 +17,6 @@ from tqdm.auto import tqdm
 
 from pyxatu.utils import CONSTANTS
 from pyxatu.helpers import PyXatuHelpers
-from pyxatu.docscraper import DocsScraper
 from pyxatu.client import ClickhouseClient
 from pyxatu.mempoolconnector import MempoolConnector
 from pyxatu.retriever import DataRetriever
@@ -85,7 +84,7 @@ class PyXatu:
         self.helpers = PyXatuHelpers()
         
         self.method_table_mapping = self.create_method_table_mapping()
-        
+
         self.update_all_column_docs()
         
         
@@ -123,23 +122,7 @@ class PyXatu:
         if not hasattr(self, '_mempool'):
             self._mempool = MempoolConnector()
         return self._mempool
-    
-    @property
-    def docs(self):
-        if not hasattr(self, '_docs'):
-            self._docs = DocsScraper()
-        return self._docs
-    
-    def get_docs(self, table_name: str = None, print_loading: bool = True):
-        """
-        Retrieves table information, such as available columns, from the DocsScraper.
-        """
-        if table_name in self.method_table_mapping.keys():
-            table_name = self.method_table_mapping[table_name]
-        if print_loading:
-            logging.info(f"Retrieving schema for table {table_name}")
-        return self.docs.get_table_info(table_name)
-    
+
     def get_columns(self, table_name: str = None):
         return self.execute_query(f"""
             SELECT name
@@ -480,7 +463,7 @@ class PyXatu:
             blocknative_data = self.mempool.download_blocknative_mempool_data(self.helpers.slot_to_time(kwargs["slot"]))
             flashbots_data = self.mempool.download_flashbots_mempool_data(self.helpers.slot_to_time(kwargs["slot"]))
 
-            blocknative_data = set(blocknative_data[blocknative_data["status"] != "confirmed"].hash.unique().tolist())
+            blocknative_data = set(blocknative_data["hash"])
             flashbots_data = set(flashbots_data["hash"])
 
             logging.info(f"Transactions found in Xatu mempool: {len(xatu_data.intersection(set(transactions['hash'])))}")
@@ -620,23 +603,22 @@ class PyXatu:
 
     def update_all_column_docs(self):
         """
-        Updates the docstrings of all high-level methods by using the table information stored in DocsScraper.
+        Updates the docstrings of all high-level methods.
         """
-        # Fetch the table info from DocsScraper (already stored during initialization)
-        all_table_info = {table: self.get_docs(table, False) for table in self.method_table_mapping.values()}
+        all_table_info = {table: self.get_columns(table)for table in self.method_table_mapping.values()}
 
         # Iterate through methods and update their docstrings
-        for method_name, table_name in self.method_table_mapping.items():
+        for method_name, columns in self.method_table_mapping.items():
             method = getattr(self, method_name, None)
-            table_info = all_table_info.get(table_name)
+            table_info = all_table_info.get(columns)
 
             if table_info is not None and not table_info.empty:
-                columns_doc = "\n".join([f"  - {col}" for col in table_info['Column']])
+                columns_doc = "\n".join([f"  - {col}" for col in table_info[0]])
             else:
                 columns_doc = "  No columns available."
 
             # Use a helper function to avoid closure issues
-            self._wrap_method_with_columns(method_name, method, table_name, columns_doc)
+            self._wrap_method_with_columns(method_name, method, columns, columns_doc)
 
     def _wrap_method_with_columns(
         self, 

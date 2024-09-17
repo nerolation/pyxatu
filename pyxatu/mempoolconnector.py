@@ -38,6 +38,7 @@ class MempoolConnector:
             local_file_path = os.path.join(storage_dir, date.split('/')[-1])
             if local_storage and os.path.exists(local_file_path):
                 # Load the file from local storage
+                print(f"Loading {local_file_path}")
                 df = pd.read_csv(local_file_path, compression='gzip')
                 df = df[["hash"]]
                 self.fbcache[date_string] = df.copy()
@@ -94,6 +95,7 @@ class MempoolConnector:
 
             if local_storage and os.path.exists(local_file_path):
                 # Load the file from local storage
+                print(f"Loading {local_file_path}")
                 df = pd.read_csv(local_file_path, compression='gzip')
                 self.bncache[cache_key] = df.copy()
                 print(f"Loaded {local_file_path} from local storage.")
@@ -110,8 +112,6 @@ class MempoolConnector:
                     df = df[["hash"]]
                     self.bncache[cache_key] = df.copy()
                     
-                    dfs.append(df)
-
                     # Save to local storage if the flag is enabled
                     if local_storage:
                         df.to_csv(local_file_path, compression='gzip', index=False)

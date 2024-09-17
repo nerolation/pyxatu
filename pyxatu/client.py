@@ -19,7 +19,10 @@ class ClickhouseClient:
 
     @retry_on_failure()
     def execute_query(self, query: str, columns: Optional[str] = "*", handle_columns: bool = False) -> pd.DataFrame:
-        logging.info(f"Executing query: {query}")
+        if "FROM system.columns" in query:
+            logging = False
+        if logging:
+            logging.info(f"Executing query: {query}")
         start_time = time.time()
         response = requests.get(
             self.url,
@@ -27,7 +30,8 @@ class ClickhouseClient:
             auth=self.auth,
             timeout=self.timeout
         )
-        logging.info(f"Query executed in {time.time() - start_time:.2f} seconds")
+        if logging:
+            logging.info(f"Query executed in {time.time() - start_time:.2f} seconds")
         response.raise_for_status()
         if handle_columns:
             if "DISTINCT" in query.upper():
@@ -41,7 +45,8 @@ class ClickhouseClient:
         else:
             potential_columns = None
         if response.text == "":
-            logging.info("No data for query")
+            if logging:
+                logging.info("No data for query")
             return None
             
         return self._parse_response(response.text, columns, potential_columns)
