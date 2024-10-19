@@ -1,5 +1,5 @@
 {
     "CLICKHOUSE_USER": "YOUR-CLICKHOUSE-USER",
     "CLICKHOUSE_PASSWORD": "YOUR-CLICKHOUSE-PASSPHRASE",
-    "CLICKHOUSE_URL": "https://clickhouse.analytics.production.platform.ethpandaops.io"
+    "CLICKHOUSE_URL": "https://clickhouse.xatu.ethpandaops.io"
 }
