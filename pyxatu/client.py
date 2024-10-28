@@ -19,9 +19,14 @@ class ClickhouseClient:
 
     @retry_on_failure()
     def execute_query(self, query: str, columns: Optional[str] = "*", handle_columns: bool = False) -> pd.DataFrame:
+        _logging=True
         if "FROM system.columns" in query:
-            logging = False
-        if logging:
+            _logging = False
+        else:
+            if not "meta_network_name" in query:
+                logging.info("No network specified. You are requesting info across testnets and mainnet.")
+                return
+        if _logging:
             logging.info(f"Executing query: {query}")
         start_time = time.time()
         response = requests.get(
@@ -30,7 +35,7 @@ class ClickhouseClient:
             auth=self.auth,
             timeout=self.timeout
         )
-        if logging:
+        if _logging:
             logging.info(f"Query executed in {time.time() - start_time:.2f} seconds")
         response.raise_for_status()
         if handle_columns:
@@ -45,7 +50,7 @@ class ClickhouseClient:
         else:
             potential_columns = None
         if response.text == "":
-            if logging:
+            if _logging:
                 logging.info("No data for query")
             return None
             

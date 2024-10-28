@@ -122,6 +122,24 @@ class PyXatu:
         if not hasattr(self, '_mempool'):
             self._mempool = MempoolConnector()
         return self._mempool
+    
+        
+    #@property
+    #def docs(self):
+    #    if not hasattr(self, '_docs'):
+    #        self._docs = DocsScraper()
+    #    return self._docs
+    
+    def get_docs(self, table_name: str = None, print_loading: bool = True):
+        """
+        Retrieves table information, such as available columns, from the DocsScraper.
+        """
+        if table_name in self.method_table_mapping.keys():
+            table_name = self.method_table_mapping[table_name]
+        if print_loading:
+            logging.info(f"Retrieving schema for table {table_name}")
+        return self.get_columns(table_name)
+    
 
     def get_columns(self, table_name: str = None):
         return self.execute_query(f"""
@@ -605,12 +623,12 @@ class PyXatu:
         """
         Updates the docstrings of all high-level methods.
         """
-        all_table_info = {table: self.get_columns(table)for table in self.method_table_mapping.values()}
+        self.all_table_info = {table: self.get_columns(table)for table in self.method_table_mapping.values()}
 
         # Iterate through methods and update their docstrings
         for method_name, columns in self.method_table_mapping.items():
             method = getattr(self, method_name, None)
-            table_info = all_table_info.get(columns)
+            table_info = self.all_table_info.get(columns)
 
             if table_info is not None and not table_info.empty:
                 columns_doc = "\n".join([f"  - {col}" for col in table_info[0]])
@@ -654,11 +672,11 @@ class PyXatu:
         if "," not in columns:
             columns += ","
         
-        existing_columns = self.get_docs(table, False)
+        existing_columns = self.all_table_info.get(table)
         if existing_columns is None:
             return True
-        if "Column" in existing_columns.columns:
-            existing_columns = existing_columns["Column"].tolist()
+        if 0 in existing_columns.columns:
+            existing_columns = existing_columns[0].tolist()
         else:
             return True
         for c in [i for i in columns.split(",") if i != ""]:
@@ -669,7 +687,7 @@ class PyXatu:
                 if _c == "" or _c == " ":
                     continue
                 print("\n" + f"{_c.strip()} not in {table} with columns:" + '\n'.join(existing_columns))
-                print("\nExisting columns: " + '\n'.join(self.get_docs(table, False)['Column'].to_list()))
+                print("\nExisting columns: " + '\n'.join(self.all_table_info.get(table)[0].to_list()))
                 return False
         return True
     
