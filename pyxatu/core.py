@@ -49,7 +49,8 @@ class PyXatu:
         config_path: Optional[str] = None, 
         use_env_variables: bool = False, 
         log_level: str = 'INFO', 
-        relay: str = None
+        relay: str = None,
+        NO_GADGET = False
     ) -> None:
         if not logging.getLogger().hasHandlers():
             logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s - %(levelname)s - %(message)s')
@@ -113,8 +114,10 @@ class PyXatu:
     
     @property
     def validators(self):
-        if not hasattr(self, '_validators'):
+        if not hasattr(self, '_validators') and self.NO_GADGET == False:
             self._validators = ValidatorGadget()
+        if NO_GADGET == False:
+            self._validators = None
         return self._validators
     
     @property
