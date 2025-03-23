@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='pyxatu',
-    version='1.8',
+    version='1.9.1',
     packages=find_packages(),
     include_package_data=True,
     package_data={

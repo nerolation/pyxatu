@@ -50,7 +50,7 @@ class PyXatu:
         use_env_variables: bool = False, 
         log_level: str = 'INFO', 
         relay: str = None,
-        NO_GADGET = False
+        no_validator_gadget = False
     ) -> None:
         if not logging.getLogger().hasHandlers():
             logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s - %(levelname)s - %(message)s')
@@ -88,6 +88,8 @@ class PyXatu:
 
         self.update_all_column_docs()
         
+        self.no_validator_gadget = no_validator_gadget
+        
         
     def read_clickhouse_config_from_env(self) -> Tuple[str, str, str]:
         """Reads Clickhouse configuration from environment variables."""
@@ -114,10 +116,10 @@ class PyXatu:
     
     @property
     def validators(self):
-        if not hasattr(self, '_validators') and self.NO_GADGET == False:
-            self._validators = ValidatorGadget()
-        if NO_GADGET == False:
+        if self.no_validator_gadget == True:
             self._validators = None
+        elif not hasattr(self, '_validators'):
+            self._validators = ValidatorGadget()
         return self._validators
     
     @property
