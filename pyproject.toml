@@ -1,3 +1,80 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyxatu"
+version = "1.9.1"
+description = "Secure and efficient Python client for querying Ethereum data from Xatu"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "PyXatu Contributors"}
+]
+keywords = ["ethereum", "blockchain", "xatu", "clickhouse", "beacon chain", "consensus layer"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Networking",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/nerolation/pyxatu"
+Documentation = "https://github.com/nerolation/pyxatu/blob/main/README.md"
+Repository = "https://github.com/nerolation/pyxatu"
+Issues = "https://github.com/nerolation/pyxatu/issues"
+
+[tool.setuptools]
+packages = ["pyxatu", "pyxatu.queries"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+pyxatu = ["py.typed", "config.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --disable-warnings"
+asyncio_mode = "auto"
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311']
+include = '\.pyi?$'
+
+[tool.ruff]
+line-length = 100
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501", # line too long (handled by black)
+    "B008", # do not perform function calls in argument defaults
+    "C901", # too complex
+]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true

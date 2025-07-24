@@ -1,2 +1,15 @@
-include pyxatu/config.json
 include README.md
+include LICENSE
+include requirements.txt
+include pyproject.toml
+include pytest.ini
+include pyxatu/py.typed
+include pyxatu/config.json
+recursive-include pyxatu *.py
+recursive-include tests *.py
+recursive-include examples *.py
+recursive-exclude * *.pyc
+recursive-exclude * __pycache__
+prune .git
+prune htmlcov
+prune .pytest_cache
