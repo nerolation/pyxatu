@@ -2,7 +2,7 @@ import click
 import importlib.resources as resources
 from pathlib import Path
 import shutil
-from .core import PyXatu
+from .pyxatu import PyXatu
 
 @click.group()
 def cli():

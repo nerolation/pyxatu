@@ -1,60 +1,16 @@
-# PyXatu 🚀
+# PyXatu
 
-A secure, efficient, and modern Python client for querying Ethereum beacon chain data from Xatu.
+Python client for querying Ethereum beacon chain data from Xatu.
 
-[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-
-## 🎯 Features
-
-- **🔒 Security First**: No eval(), SQL injection prevention, secure credential handling
-- **⚡ High Performance**: Async operations, connection pooling, ClickHouse partition optimization
-- **🏗️ Modern Architecture**: Type hints, Pydantic models, clean modular design
-- **📊 Comprehensive Data Access**: Slots, attestations, transactions, validators, MEV data
-- **🔄 Automatic Retries**: Built-in retry logic with exponential backoff
-- **🎨 Developer Friendly**: Intuitive API, great error messages, extensive documentation
-
-## 📦 Installation
+## Installation
 
 ```bash
 pip install pyxatu
 ```
 
-For development:
-```bash
-pip install pyxatu[dev]
-```
+## Configuration
 
-## 🚀 Quick Start
-
-```python
-import asyncio
-from pyxatu import PyXatu, Network
-
-async def main():
-    # Initialize with environment variables or config file
-    async with PyXatu() as xatu:
-        # Get recent blocks
-        blocks = await xatu.get_slots(
-            slot=[9000000, 9000010],
-            network=Network.MAINNET
-        )
-        print(f"Found {len(blocks)} blocks")
-        
-        # Get attestations for a specific slot
-        attestations = await xatu.get_attestations(
-            slot=9000000,
-            network=Network.MAINNET
-        )
-        print(f"Found {len(attestations)} attestations")
-
-asyncio.run(main())
-```
-
-## 🔧 Configuration
-
-### Environment Variables (Recommended)
+### Environment Variables
 
 ```bash
 export CLICKHOUSE_URL="https://your-clickhouse-server.com"
@@ -75,188 +31,143 @@ Create `~/.pyxatu_config.json`:
 }
 ```
 
-## 📚 Usage Examples
+## Usage
 
-### Query Slots with Missed Blocks
+### Basic Queries
+
+```python
+import asyncio
+from pyxatu import PyXatu, Network
+
+async def main():
+    async with PyXatu() as xatu:
+        # Query slots
+        slots = await xatu.get_slots(
+            slot=[9000000, 9000010],
+            network=Network.MAINNET
+        )
+        
+        # Query attestations
+        attestations = await xatu.get_attestations(
+            slot=9000000,
+            network=Network.MAINNET
+        )
+
+asyncio.run(main())
+```
+
+### Slot Analysis
 
 ```python
 async with PyXatu() as xatu:
-    # Get slots including missed blocks
+    # Include missed slots
     slots = await xatu.get_slots(
         slot=[9000000, 9000100],
         include_missed=True,
         network=Network.MAINNET
     )
     
-    # Get only missed slots
+    # Get missed slots only
     missed = await xatu.get_missed_slots(
         slot_range=[9000000, 9000100]
     )
-    print(f"Missed slots: {missed}")
 ```
 
-### Analyze Attestation Performance
+### Attestation Performance
 
 ```python
 async with PyXatu() as xatu:
-    # Get detailed attestation performance
+    # Analyze attestation performance
     performance = await xatu.get_elaborated_attestations(
         slot=[9000000, 9000010],
         vote_types=['source', 'target', 'head'],
         status_filter=['correct', 'failed'],
         include_delay=True
     )
-    
-    # Analyze results
-    correct = performance[performance['status'] == 'correct']
-    print(f"Correct attestations: {len(correct)}/{len(performance)}")
 ```
 
-### Analyze Transaction Privacy
+### Transaction Analysis
 
 ```python
 async with PyXatu() as xatu:
-    # Get transactions with mempool analysis
+    # Analyze transaction privacy
     transactions = await xatu.get_elaborated_transactions(
         slots=[9000000, 9000001, 9000002],
         include_external_mempool=True
     )
     
-    # Check private vs public transactions
-    private_txs = transactions[transactions['private'] == True]
-    print(f"Private transactions: {len(private_txs)}/{len(transactions)}")
-```
-
-### Query Block Metrics
-
-```python
-async with PyXatu() as xatu:
-    # Get block size metrics including blob data
+    # Get block metrics
     block_sizes = await xatu.get_block_sizes(
         slot=[9000000, 9001000],
-        orderby="-blobs"  # Order by blob count descending
+        orderby="-blobs"
     )
-    
-    print(f"Average block size: {block_sizes['block_total_bytes'].mean():,.0f} bytes")
-    print(f"Max blobs in a block: {block_sizes['blobs'].max()}")
 ```
 
-### MEV Data from Relays
+## API Reference
 
-```python
-from pyxatu.relay_connector import RelayConnector
+### Main Methods
 
-async with RelayConnector() as relay:
-    # Get delivered payloads for a slot
-    payloads = await relay.get_proposer_payload_delivered(
-        slot=9000000,
-        limit=100
-    )
-    
-    # Get aggregated bid statistics
-    stats = await relay.get_aggregate_bid_stats(slot=9000000)
-    print(f"Winning bid: {stats['max_value_wei']} wei")
-    print(f"Winning relay: {stats['winning_relay']}")
-```
+- `get_slots()` - Query beacon chain blocks
+- `get_attestations()` - Query attestations
+- `get_elaborated_attestations()` - Detailed attestation analysis
+- `get_transactions()` - Query transactions
+- `get_elaborated_transactions()` - Transaction privacy analysis
+- `get_withdrawals()` - Query validator withdrawals
+- `get_block_sizes()` - Block size metrics
+- `get_proposer_duties()` - Proposer assignments
 
-## 🏗️ Architecture
+### Parameters
 
-PyXatu features a clean, modular architecture:
+All query methods accept:
+- `slot`: Single slot or range [start, end)
+- `network`: Network enum (MAINNET, SEPOLIA, HOLESKY)
+- `columns`: Columns to retrieve (default: "*")
+- `limit`: Maximum rows to return
+- `orderby`: Sort column (prefix with - for DESC)
+
+## Architecture
 
 ```
 pyxatu/
-├── pyxatu.py          # Main interface
-├── models.py          # Pydantic data models
-├── config.py          # Configuration management
-├── clickhouse_client.py # Async database client
-├── queries/           # Domain-specific query modules
+├── pyxatu.py              # Main interface
+├── models.py              # Data models
+├── config.py              # Configuration
+├── clickhouse_client.py   # Database client
+├── queries/               # Query modules
 │   ├── slot_queries.py
 │   ├── attestation_queries.py
 │   ├── transaction_queries.py
 │   └── validator_queries.py
-├── mempool_connector.py # Mempool data integration
-└── relay_connector.py   # MEV-Boost relay connector
+├── mempool_connector.py   # Mempool integration
+└── relay_connector.py     # MEV relay connector
 ```
 
-## 🔒 Security Features
+## Technical Details
 
-- **No eval()**: All JSON parsing uses safe methods
-- **SQL Injection Prevention**: Parameterized queries throughout
-- **Input Validation**: Comprehensive validation with Pydantic
-- **Secure Credentials**: Passwords stored as SecretStr
-- **Table Whitelist**: Only approved tables can be queried
-- **Partition Optimization**: Automatic date filtering for performance
+### Performance Optimizations
 
-## ⚡ Performance Optimizations
+- **Partition Filtering**: Automatic `slot_start_date_time` filtering prevents full table scans
+- **Connection Pooling**: Reuses database connections
+- **Async Operations**: Non-blocking I/O for concurrent queries
+- **Batch Processing**: Efficient handling of large datasets
 
-### ClickHouse Partition Filtering
-PyXatu automatically adds partition key filters to prevent full table scans:
+### Security
 
-```python
-# This query automatically includes slot_start_date_time filtering
-slots = await xatu.get_slots(slot=[9000000, 9001000])
+- Parameterized queries prevent SQL injection
+- Input validation on all parameters
+- Secure credential storage with SecretStr
+- Table whitelist enforcement
 
-# Generated SQL includes:
-# WHERE slot BETWEEN 9000000 AND 9000999
-# AND slot_start_date_time >= '2024-01-01 00:00:00' - INTERVAL 1 HOUR
-# AND slot_start_date_time <= '2024-01-01 03:00:00' + INTERVAL 1 HOUR
-```
-
-### Connection Pooling
-Automatic connection pooling for optimal resource usage:
-
-```python
-# Connections are automatically pooled and reused
-async with PyXatu() as xatu:
-    # Multiple queries reuse connections efficiently
-    tasks = [
-        xatu.get_slots(slot=i) 
-        for i in range(9000000, 9000100)
-    ]
-    results = await asyncio.gather(*tasks)
-```
-
-## 🧪 Testing
-
-Run the comprehensive test suite:
+## Testing
 
 ```bash
-# Install test dependencies
-pip install pyxatu[dev]
-
-# Run all tests
+# Run tests
 pytest
 
 # Run with coverage
 pytest --cov=pyxatu --cov-report=html
-
-# Run only security tests
-pytest tests/test_security.py -v
 ```
 
-## 🤝 Contributing
+## License
 
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
-
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
-## 🙏 Acknowledgments
-
-- Built on top of [Xatu](https://github.com/ethpandaops/xatu) data
-- Powered by [ClickHouse](https://clickhouse.com/)
-- Inspired by the Ethereum community's need for accessible beacon chain data
-
-## 📞 Support
-
-- 📧 Open an issue on [GitHub](https://github.com/nerolation/pyxatu/issues)
-- 💬 Join the discussion on [Discord](https://discord.gg/ethereum)
-- 📚 Read the [documentation](https://github.com/nerolation/pyxatu/wiki)
+MIT
