@@ -1,11 +1,4 @@
-"""PyXatu - Secure and efficient Ethereum blockchain data queries.
-
-Key features:
-- Security: No eval(), parameterized queries, input validation
-- Performance: Async operations, connection pooling, caching
-- Simplicity: Clean API, modular design, type safety
-- Reliability: Comprehensive error handling, retry logic
-"""
+"""PyXatu - Python client for querying Ethereum beacon chain data."""
 
 from pyxatu.pyxatu import PyXatu
 from pyxatu.models import (

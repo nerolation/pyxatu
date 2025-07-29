@@ -1,4 +1,4 @@
-"""Secure ClickHouse client with connection pooling and parameterized queries."""
+"""ClickHouse client for PyXatu."""
 
 import asyncio
 import logging
@@ -13,10 +13,11 @@ import backoff
 
 from pyxatu.base import BaseClient
 from pyxatu.config import ClickhouseConfig
+from pyxatu.schema import get_schema_manager
 
 
 class ClickHouseQueryBuilder:
-    """Safe SQL query builder for ClickHouse."""
+    """SQL query builder for ClickHouse."""
     
     ALLOWED_TABLES = {
         'beacon_api_eth_v1_events_block',
@@ -108,12 +109,26 @@ class ClickHouseQueryBuilder:
         return self
         
     def where_slot_with_partition(self, slot_start: int, slot_end: Optional[int] = None) -> 'ClickHouseQueryBuilder':
-        """Add slot filter with automatic partition date filter for optimal performance.
-        
-        This is critical for ClickHouse performance as it filters by the partition key
-        (slot_start_date_time) before filtering by slot, avoiding full table scans.
-        """
+        """Add slot filter with partition optimization."""
         from pyxatu.utils import slot_to_timestamp
+        
+        # Get partitioning info from schema if available
+        schema_mgr = get_schema_manager()
+        partition_col = 'slot_start_date_time'  # default
+        
+        if self._from_table:
+            table_info = schema_mgr.get_table_info(self._from_table)
+            if table_info:
+                partition_col = table_info.partitioning_column
+        
+        # Only apply partition optimization if the table uses slot_start_date_time
+        if partition_col != 'slot_start_date_time':
+            # For tables like mempool_transaction that use event_date_time
+            if slot_end is None:
+                self.where('slot', '=', slot_start)
+            else:
+                self.where_between('slot', slot_start, slot_end - 1)
+            return self
         
         # Single slot
         if slot_end is None:
@@ -121,8 +136,8 @@ class ClickHouseQueryBuilder:
             # Add partition filter for single slot
             slot_time = slot_to_timestamp(slot_start)
             self.where_raw(
-                f"slot_start_date_time >= toDateTime('{slot_time.strftime('%Y-%m-%d %H:%M:%S')}') - INTERVAL 1 MINUTE "
-                f"AND slot_start_date_time <= toDateTime('{slot_time.strftime('%Y-%m-%d %H:%M:%S')}') + INTERVAL 1 MINUTE"
+                f"{partition_col} >= toDateTime('{slot_time.strftime('%Y-%m-%d %H:%M:%S')}') - INTERVAL 1 MINUTE "
+                f"AND {partition_col} <= toDateTime('{slot_time.strftime('%Y-%m-%d %H:%M:%S')}') + INTERVAL 1 MINUTE"
             )
         else:
             # Slot range
@@ -131,8 +146,8 @@ class ClickHouseQueryBuilder:
             start_time = slot_to_timestamp(slot_start)
             end_time = slot_to_timestamp(slot_end)
             self.where_raw(
-                f"slot_start_date_time >= toDateTime('{start_time.strftime('%Y-%m-%d %H:%M:%S')}') - INTERVAL 1 HOUR "
-                f"AND slot_start_date_time <= toDateTime('{end_time.strftime('%Y-%m-%d %H:%M:%S')}') + INTERVAL 1 HOUR"
+                f"{partition_col} >= toDateTime('{start_time.strftime('%Y-%m-%d %H:%M:%S')}') - INTERVAL 1 HOUR "
+                f"AND {partition_col} <= toDateTime('{end_time.strftime('%Y-%m-%d %H:%M:%S')}') + INTERVAL 1 HOUR"
             )
         return self
         
@@ -208,7 +223,7 @@ class ClickHouseQueryBuilder:
 
 
 class ClickHouseClient(BaseClient):
-    """Async ClickHouse client with connection pooling and security features."""
+    """Async ClickHouse client."""
     
     def __init__(self, config: ClickhouseConfig):
         self.config = config

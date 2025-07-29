@@ -291,3 +291,7 @@ class AttestationDataFetcher(BaseDataFetcher[Attestation]):
                     })
                     
         return results
+    
+    async def fetch_duties(self, params: SlotQueryParams) -> pd.DataFrame:
+        """Fetch attester duty assignments (public wrapper)."""
+        return await self._fetch_duties(params)

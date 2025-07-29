@@ -1,0 +1,310 @@
+{
+  "tables": {
+    "beacon_api_eth_v1_events_block": {
+      "description": "Events derived from the Beacon API event stream for blocks. This data is useful for 'timing' events, such as when a block was seen by a sentry.",
+      "table_name": "beacon_api_eth_v1_events_block",
+      "partitioning_column": "slot_start_date_time",
+      "networks_available": ["mainnet", "sepolia", "holesky"],
+      "pyxatu_method": "get_blockevent",
+      "data_characteristics": {
+        "source": "Beacon API event stream",
+        "update_frequency": "Real-time",
+        "reliability": "Medium - depends on sentry availability"
+      },
+      "common_columns": [
+        {"name": "slot", "type": "UInt64", "description": "The slot number"},
+        {"name": "slot_start_date_time", "type": "DateTime", "description": "The start time of the slot"},
+        {"name": "meta_network_name", "type": "String", "description": "The network name (mainnet, sepolia, etc.)"},
+        {"name": "propagation_slot_start_diff", "type": "Int64", "description": "Time difference between slot start and when block was seen"}
+      ]
+    },
+    "beacon_api_eth_v1_events_attestation": {
+      "description": "Attestation events from the Beacon API event stream",
+      "table_name": "beacon_api_eth_v1_events_attestation",
+      "partitioning_column": "slot_start_date_time",
+      "networks_available": ["mainnet", "sepolia", "holesky"],
+      "pyxatu_method": "get_attestation_event",
+      "data_characteristics": {
+        "source": "Beacon API event stream",
+        "update_frequency": "Real-time",
+        "reliability": "Medium - depends on sentry availability"
+      },
+      "common_columns": [
+        {"name": "slot", "type": "UInt64", "description": "The slot number"},
+        {"name": "slot_start_date_time", "type": "DateTime", "description": "The start time of the slot"},
+        {"name": "meta_network_name", "type": "String", "description": "The network name"},
+        {"name": "committee_index", "type": "UInt64", "description": "The committee index"},
+        {"name": "aggregation_bits", "type": "String", "description": "Aggregation bits of the attestation"}
+      ]
+    },
+    "beacon_api_eth_v1_events_chain_reorg": {
+      "description": "Chain reorganization events from the Beacon API",
+      "table_name": "beacon_api_eth_v1_events_chain_reorg",
+      "partitioning_column": "slot_start_date_time",
+      "networks_available": ["mainnet", "sepolia", "holesky"],
+      "pyxatu_method": "get_reorgs",
+      "data_characteristics": {
+        "source": "Beacon API event stream",
+        "update_frequency": "Real-time when reorgs occur",
+        "reliability": "High - critical events"
+      },
+      "common_columns": [
+        {"name": "slot", "type": "UInt64", "description": "The slot where reorg occurred"},
+        {"name": "depth", "type": "UInt64", "description": "The depth of the reorg"},
+        {"name": "slot_start_date_time", "type": "DateTime", "description": "The start time of the slot"},
+        {"name": "meta_network_name", "type": "String", "description": "The network name"}
+      ]
+    },
+    "beacon_api_eth_v1_events_blob_sidecar": {
+      "description": "Blob sidecar events from the Beacon API (EIP-4844)",
+      "table_name": "beacon_api_eth_v1_events_blob_sidecar",
+      "partitioning_column": "slot_start_date_time",
+      "networks_available": ["mainnet", "sepolia", "holesky"],
+      "pyxatu_method": "get_blob_events",
+      "data_characteristics": {
+        "source": "Beacon API event stream",
+        "update_frequency": "Real-time",
+        "reliability": "Medium",
+        "data_available_from": "Post-Deneb upgrade"
+      },
+      "common_columns": [
+        {"name": "slot", "type": "UInt64", "description": "The slot number"},
+        {"name": "slot_start_date_time", "type": "DateTime", "description": "The start time of the slot"},
+        {"name": "meta_network_name", "type": "String", "description": "The network name"},
+        {"name": "blob_index", "type": "UInt64", "description": "Index of the blob"}
+      ]
+    },
+    "beacon_api_eth_v1_beacon_committee": {
+      "description": "Beacon committee data showing validator duties for each slot",
+      "table_name": "beacon_api_eth_v1_beacon_committee",
+      "partitioning_column": "slot_start_date_time",
+      "networks_available": ["mainnet", "sepolia", "holesky"],
+      "pyxatu_method": "get_duties",
+      "data_characteristics": {
+        "source": "Beacon API",
+        "update_frequency": "Per epoch",
+        "reliability": "High"
+      },
+      "common_columns": [
+        {"name": "slot", "type": "UInt64", "description": "The slot number"},
+        {"name": "slot_start_date_time", "type": "DateTime", "description": "The start time of the slot"},
+        {"name": "meta_network_name", "type": "String", "description": "The network name"},
+        {"name": "validators", "type": "Array(UInt64)", "description": "Array of validator indices in the committee"},
+        {"name": "committee_index", "type": "UInt64", "description": "The committee index"}
+      ]
+    },
+    "beacon_api_eth_v2_beacon_block": {
+      "description": "Beacon block data (version 2 API)",
+      "table_name": "beacon_api_eth_v2_beacon_block",
+      "partitioning_column": "slot_start_date_time",
+      "networks_available": ["mainnet", "sepolia", "holesky"],
+      "pyxatu_method": "get_beacon_block_v2",
+      "data_characteristics": {
+        "source": "Beacon API v2",
+        "update_frequency": "Real-time",
+        "reliability": "High"
+      },
+      "common_columns": [
+        {"name": "slot", "type": "UInt64", "description": "The slot number"},
+        {"name": "slot_start_date_time", "type": "DateTime", "description": "The start time of the slot"},
+        {"name": "meta_network_name", "type": "String", "description": "The network name"},
+        {"name": "block_root", "type": "String", "description": "The block root hash"},
+        {"name": "parent_root", "type": "String", "description": "The parent block root"}
+      ]
+    },
+    "canonical_beacon_block": {
+      "description": "Canonical (finalized) beacon chain block data. More complete and reliable than beacon_api_ tables.",
+      "table_name": "canonical_beacon_block",
+      "partitioning_column": "slot_start_date_time",
+      "networks_available": ["mainnet", "sepolia", "holesky"],
+      "pyxatu_method": "get_slots",
+      "data_characteristics": {
+        "source": "Finalized beacon chain",
+        "update_frequency": "After finalization (~15 minutes)",
+        "reliability": "Very High - deduplicated and complete"
+      },
+      "common_columns": [
+        {"name": "slot", "type": "UInt64", "description": "The slot number"},
+        {"name": "slot_start_date_time", "type": "DateTime", "description": "The start time of the slot"},
+        {"name": "meta_network_name", "type": "String", "description": "The network name"},
+        {"name": "block_root", "type": "String", "description": "The block root hash"},
+        {"name": "parent_root", "type": "String", "description": "The parent block root"},
+        {"name": "state_root", "type": "String", "description": "The state root"},
+        {"name": "proposer_index", "type": "UInt64", "description": "The proposer validator index"},
+        {"name": "block_total_bytes", "type": "UInt64", "description": "Total size of the block in bytes"},
+        {"name": "block_total_bytes_compressed", "type": "UInt64", "description": "Compressed size of the block"},
+        {"name": "execution_payload_blob_gas_used", "type": "UInt64", "description": "Blob gas used in the execution payload"}
+      ]
+    },
+    "canonical_beacon_elaborated_attestation": {
+      "description": "Processed attestation data with expanded validator information",
+      "table_name": "canonical_beacon_elaborated_attestation",
+      "partitioning_column": "slot_start_date_time",
+      "networks_available": ["mainnet", "sepolia", "holesky"],
+      "pyxatu_method": "get_attestation",
+      "data_characteristics": {
+        "source": "Finalized beacon chain",
+        "update_frequency": "After finalization",
+        "reliability": "Very High",
+        "special_processing": "Validators array is expanded into individual rows"
+      },
+      "common_columns": [
+        {"name": "slot", "type": "UInt64", "description": "The attestation slot"},
+        {"name": "slot_start_date_time", "type": "DateTime", "description": "The start time of the slot"},
+        {"name": "meta_network_name", "type": "String", "description": "The network name"},
+        {"name": "validators", "type": "Array(UInt64)", "description": "Array of attesting validators (expanded by PyXatu)"},
+        {"name": "block_slot", "type": "UInt64", "description": "Slot where attestation was included"},
+        {"name": "source_root", "type": "String", "description": "Source checkpoint root"},
+        {"name": "target_root", "type": "String", "description": "Target checkpoint root"},
+        {"name": "beacon_block_root", "type": "String", "description": "Head block root"}
+      ]
+    },
+    "canonical_beacon_proposer_duty": {
+      "description": "Proposer duty assignments for each slot",
+      "table_name": "canonical_beacon_proposer_duty",
+      "partitioning_column": "slot_start_date_time",
+      "networks_available": ["mainnet", "sepolia", "holesky"],
+      "pyxatu_method": "get_proposer",
+      "data_characteristics": {
+        "source": "Finalized beacon chain",
+        "update_frequency": "Per epoch",
+        "reliability": "Very High"
+      },
+      "common_columns": [
+        {"name": "slot", "type": "UInt64", "description": "The slot number"},
+        {"name": "slot_start_date_time", "type": "DateTime", "description": "The start time of the slot"},
+        {"name": "meta_network_name", "type": "String", "description": "The network name"},
+        {"name": "proposer_validator_index", "type": "UInt64", "description": "The assigned proposer validator index"},
+        {"name": "proposer_pubkey", "type": "String", "description": "The proposer's public key"}
+      ]
+    },
+    "canonical_beacon_blob_sidecar": {
+      "description": "Canonical blob sidecar data (EIP-4844)",
+      "table_name": "canonical_beacon_blob_sidecar",
+      "partitioning_column": "slot_start_date_time",
+      "networks_available": ["mainnet", "sepolia", "holesky"],
+      "pyxatu_method": "get_blobs",
+      "data_characteristics": {
+        "source": "Finalized beacon chain",
+        "update_frequency": "After finalization",
+        "reliability": "Very High",
+        "data_available_from": "Post-Deneb upgrade"
+      },
+      "common_columns": [
+        {"name": "slot", "type": "UInt64", "description": "The slot number"},
+        {"name": "slot_start_date_time", "type": "DateTime", "description": "The start time of the slot"},
+        {"name": "meta_network_name", "type": "String", "description": "The network name"},
+        {"name": "blob_index", "type": "UInt64", "description": "Index of the blob"},
+        {"name": "kzg_commitment", "type": "String", "description": "KZG commitment for the blob"},
+        {"name": "kzg_proof", "type": "String", "description": "KZG proof for the blob"}
+      ]
+    },
+    "canonical_beacon_block_withdrawal": {
+      "description": "Validator withdrawal data from beacon blocks",
+      "table_name": "canonical_beacon_block_withdrawal",
+      "partitioning_column": "slot_start_date_time",
+      "networks_available": ["mainnet", "sepolia", "holesky"],
+      "pyxatu_method": "get_withdrawals",
+      "data_characteristics": {
+        "source": "Finalized beacon chain",
+        "update_frequency": "After finalization",
+        "reliability": "Very High",
+        "data_available_from": "Post-Shanghai upgrade"
+      },
+      "common_columns": [
+        {"name": "slot", "type": "UInt64", "description": "The slot number"},
+        {"name": "slot_start_date_time", "type": "DateTime", "description": "The start time of the slot"},
+        {"name": "meta_network_name", "type": "String", "description": "The network name"},
+        {"name": "withdrawal_index", "type": "UInt64", "description": "Global withdrawal index"},
+        {"name": "validator_index", "type": "UInt64", "description": "Index of the withdrawing validator"},
+        {"name": "address", "type": "String", "description": "Withdrawal address"},
+        {"name": "amount", "type": "UInt64", "description": "Withdrawal amount in gwei"}
+      ]
+    },
+    "canonical_beacon_block_execution_transaction": {
+      "description": "Execution layer transactions included in beacon blocks",
+      "table_name": "canonical_beacon_block_execution_transaction",
+      "partitioning_column": "slot_start_date_time",
+      "networks_available": ["mainnet", "sepolia", "holesky"],
+      "pyxatu_method": "get_transactions",
+      "data_characteristics": {
+        "source": "Finalized beacon chain",
+        "update_frequency": "After finalization",
+        "reliability": "Very High"
+      },
+      "common_columns": [
+        {"name": "slot", "type": "UInt64", "description": "The slot number"},
+        {"name": "slot_start_date_time", "type": "DateTime", "description": "The start time of the slot"},
+        {"name": "meta_network_name", "type": "String", "description": "The network name"},
+        {"name": "position", "type": "UInt64", "description": "Transaction position in block"},
+        {"name": "hash", "type": "String", "description": "Transaction hash"},
+        {"name": "from", "type": "String", "description": "Sender address"},
+        {"name": "to", "type": "String", "description": "Recipient address"},
+        {"name": "value", "type": "String", "description": "Transaction value"},
+        {"name": "gas_price", "type": "String", "description": "Gas price"}
+      ]
+    },
+    "canonical_execution_transaction": {
+      "description": "Execution layer transaction data",
+      "table_name": "canonical_execution_transaction",
+      "partitioning_column": "slot_start_date_time",
+      "networks_available": ["mainnet", "sepolia", "holesky"],
+      "pyxatu_method": "get_el_transactions",
+      "data_characteristics": {
+        "source": "Execution layer",
+        "update_frequency": "After finalization",
+        "reliability": "Very High"
+      },
+      "common_columns": [
+        {"name": "slot", "type": "UInt64", "description": "The slot number"},
+        {"name": "slot_start_date_time", "type": "DateTime", "description": "The start time of the slot"},
+        {"name": "meta_network_name", "type": "String", "description": "The network name"},
+        {"name": "hash", "type": "String", "description": "Transaction hash"},
+        {"name": "block_number", "type": "UInt64", "description": "Execution block number"}
+      ]
+    },
+    "mempool_transaction": {
+      "description": "Mempool transaction events from the execution layer p2p network",
+      "table_name": "mempool_transaction",
+      "partitioning_column": "event_date_time",
+      "networks_available": ["mainnet", "sepolia", "holesky"],
+      "pyxatu_method": "get_mempool",
+      "data_characteristics": {
+        "source": "Execution layer p2p network",
+        "update_frequency": "Real-time",
+        "reliability": "Medium - depends on p2p visibility",
+        "special_notes": "Uses event_date_time for partitioning instead of slot_start_date_time"
+      },
+      "common_columns": [
+        {"name": "event_date_time", "type": "DateTime", "description": "Time when transaction was seen in mempool"},
+        {"name": "hash", "type": "String", "description": "Transaction hash"},
+        {"name": "from", "type": "String", "description": "Sender address"},
+        {"name": "to", "type": "String", "description": "Recipient address"},
+        {"name": "value", "type": "String", "description": "Transaction value"},
+        {"name": "gas_price", "type": "String", "description": "Gas price"},
+        {"name": "meta_network_name", "type": "String", "description": "The network name"}
+      ]
+    }
+  },
+  "general_notes": {
+    "partitioning_strategy": "Most tables are partitioned by slot_start_date_time for efficient time-based queries",
+    "network_filtering": "All queries should include meta_network_name filter to avoid mixing data from different networks",
+    "data_reliability": {
+      "canonical_tables": "Most reliable - derived from finalized chain, deduplicated",
+      "beacon_api_tables": "Medium reliability - real-time but may have duplicates or missing data",
+      "mempool_tables": "Lower reliability - depends on p2p network visibility"
+    },
+    "slot_time_calculation": {
+      "mainnet_genesis": "2020-12-01 12:00:23 UTC",
+      "sepolia_genesis": "2022-06-20 22:00:00 UTC",
+      "holesky_genesis": "2023-09-28 12:00:00 UTC",
+      "seconds_per_slot": 12,
+      "slots_per_epoch": 32
+    },
+    "common_query_patterns": {
+      "time_filtering": "Use slot ranges and corresponding slot_start_date_time for efficient queries",
+      "network_selection": "Always specify meta_network_name to avoid cross-network data",
+      "finality_consideration": "Canonical tables update ~15 minutes after slot time due to finalization"
+    }
+  }
+}

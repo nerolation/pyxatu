@@ -122,3 +122,13 @@ lib/
 lib64/
 pyvenv.cfg
 share/
+
+# Project specific ignores
+*.ipynb
+*.sh
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
+*.orig
+*.rej

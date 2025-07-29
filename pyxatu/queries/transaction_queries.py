@@ -303,3 +303,28 @@ class TransactionDataFetcher(BaseDataFetcher[Transaction]):
             df.drop('execution_payload_blob_gas_used', axis=1, inplace=True)
             
         return df
+    
+    async def fetch_blob_events(self, params: SlotQueryParams) -> pd.DataFrame:
+        """Fetch blob sidecar events from beacon API."""
+        query = f"""
+        SELECT
+            slot,
+            slot_start_date_time,
+            epoch,
+            wallclock_slot,
+            wallclock_epoch,
+            propagation_slot_start_diff,
+            block_root,
+            blob_index,
+            kzg_commitment,
+            versioned_hash,
+            meta_client_name,
+            meta_client_version,
+            meta_network_name
+        FROM beacon_api_eth_v1_events_blob_sidecar
+        WHERE {self._build_where_clause(params)}
+        {self._build_order_clause(params)}
+        {self._build_limit_clause(params)}
+        """
+        
+        return await self.client.execute_query_df(query)

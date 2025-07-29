@@ -1,4 +1,4 @@
-"""Main PyXatu class - simplified and secure interface for blockchain data queries."""
+"""PyXatu client for querying Ethereum beacon chain data."""
 
 import asyncio
 import logging
@@ -15,17 +15,11 @@ from pyxatu.queries import (
     SlotDataFetcher, AttestationDataFetcher,
     TransactionDataFetcher, ValidatorDataFetcher
 )
+from pyxatu.validator_labels import ValidatorLabelManager
 
 
 class PyXatu:
-    """Main interface for querying Ethereum blockchain data from Xatu.
-    
-    This is a complete rewrite focusing on:
-    - Security: No eval(), parameterized queries, input validation
-    - Simplicity: Clean API, modular design
-    - Performance: Async operations, connection pooling
-    - Type safety: Full type hints with Pydantic models
-    """
+    """Client for querying Ethereum beacon chain data from Xatu."""
     
     def __init__(
         self,
@@ -33,12 +27,12 @@ class PyXatu:
         use_env_vars: bool = True,
         log_level: str = 'INFO'
     ):
-        """Initialize PyXatu with configuration.
+        """Initialize PyXatu.
         
         Args:
-            config_path: Path to configuration file (default: ~/.pyxatu_config.json)
-            use_env_vars: Whether to use environment variables for config
-            log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+            config_path: Path to configuration file
+            use_env_vars: Use environment variables for config
+            log_level: Logging level
         """
         # Set up logging
         logging.basicConfig(
@@ -57,6 +51,7 @@ class PyXatu:
         self._attestation_fetcher: Optional[AttestationDataFetcher] = None
         self._transaction_fetcher: Optional[TransactionDataFetcher] = None
         self._validator_fetcher: Optional[ValidatorDataFetcher] = None
+        self._label_manager: Optional[ValidatorLabelManager] = None
         
         # Track if we're in an async context
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -71,17 +66,14 @@ class PyXatu:
         await self.close()
         
     async def connect(self) -> None:
-        """Initialize connection to ClickHouse."""
+        """Connect to ClickHouse."""
         if self._client is None:
             self._client = ClickHouseClient(self.config.clickhouse)
             
-            # Test connection
             if not await self._client.test_connection():
                 raise ConnectionError("Failed to connect to ClickHouse")
                 
             self.logger.info("Connected to ClickHouse")
-            
-            # Initialize fetchers
             self._slot_fetcher = SlotDataFetcher(self._client)
             self._attestation_fetcher = AttestationDataFetcher(
                 self._client, self._slot_fetcher
@@ -90,7 +82,7 @@ class PyXatu:
             self._validator_fetcher = ValidatorDataFetcher(self._client)
             
     async def close(self) -> None:
-        """Close all connections."""
+        """Close connection."""
         if self._client:
             await self._client.close()
             self._client = None
@@ -148,15 +140,7 @@ class PyXatu:
         slot_range: Optional[List[int]] = None,
         network: Union[str, Network] = Network.MAINNET
     ) -> List[int]:
-        """Get list of missed slots in a range.
-        
-        Args:
-            slot_range: Range [start, end) to check
-            network: Network name
-            
-        Returns:
-            List of missed slot numbers
-        """
+        """Get missed slots in a range."""
         self._ensure_connected()
         
         network_str = network.value if isinstance(network, Network) else network
@@ -169,16 +153,7 @@ class PyXatu:
         network: Union[str, Network] = Network.MAINNET,
         limit: Optional[int] = None
     ) -> pd.DataFrame:
-        """Get chain reorganization data.
-        
-        Args:
-            slot: Single slot or range to check
-            network: Network name
-            limit: Maximum rows to return
-            
-        Returns:
-            DataFrame with reorg data
-        """
+        """Get chain reorganizations."""
         self._ensure_connected()
         
         params = SlotQueryParams(
@@ -231,18 +206,7 @@ class PyXatu:
         include_delay: bool = True,
         network: Union[str, Network] = Network.MAINNET
     ) -> pd.DataFrame:
-        """Get detailed attestation performance data.
-        
-        Args:
-            slot: Single slot or range [start, end)
-            vote_types: Vote types to include (source, target, head)
-            status_filter: Status types to include (correct, failed, offline)
-            include_delay: Whether to calculate inclusion delay
-            network: Network name
-            
-        Returns:
-            DataFrame with elaborated attestation data
-        """
+        """Get detailed attestation performance data."""
         self._ensure_connected()
         
         # Convert slot to range
@@ -460,7 +424,328 @@ class PyXatu:
         
         self.logger.warning("Executing raw SQL query - ensure it's properly sanitized")
         return await self._client.execute_query_df(query, params)
+    
+    # Validator label methods
+    
+    async def get_label_manager(self) -> ValidatorLabelManager:
+        """Get or initialize the validator label manager.
         
+        Returns:
+            Initialized ValidatorLabelManager instance
+        """
+        self._ensure_connected()
+        
+        if self._label_manager is None:
+            self._label_manager = ValidatorLabelManager(self._client)
+            await self._label_manager.initialize()
+        
+        return self._label_manager
+    
+    async def get_validator_label(self, validator_index: int) -> Optional[str]:
+        """Get entity label for a validator.
+        
+        Args:
+            validator_index: Validator index
+            
+        Returns:
+            Entity name or None
+        """
+        manager = await self.get_label_manager()
+        return manager.get_validator_label(validator_index)
+    
+    async def get_validator_labels(
+        self,
+        validator_indices: List[int]
+    ) -> Dict[int, Optional[str]]:
+        """Get labels for multiple validators.
+        
+        Args:
+            validator_indices: List of validator indices
+            
+        Returns:
+            Dictionary mapping indices to entity names
+        """
+        manager = await self.get_label_manager()
+        return manager.get_validator_labels_bulk(validator_indices)
+    
+    async def add_validator_labels(
+        self,
+        df: pd.DataFrame,
+        index_column: str = 'validator_index',
+        label_column: str = 'entity'
+    ) -> pd.DataFrame:
+        """Add entity labels to a DataFrame containing validator indices.
+        
+        Args:
+            df: DataFrame with validator indices
+            index_column: Column containing validator indices
+            label_column: Name for the new label column
+            
+        Returns:
+            DataFrame with added labels
+        """
+        manager = await self.get_label_manager()
+        return manager.label_dataframe(df, index_column, label_column)
+    
+    async def get_validators_by_entity(self, entity_name: str) -> List[int]:
+        """Get all validator indices for an entity.
+        
+        Args:
+            entity_name: Entity name (e.g., 'coinbase', 'lido')
+            
+        Returns:
+            List of validator indices
+        """
+        manager = await self.get_label_manager()
+        return manager.get_validators_by_entity(entity_name)
+    
+    async def get_entity_statistics(self) -> pd.DataFrame:
+        """Get statistics about validator entities.
+        
+        Returns:
+            DataFrame with entity counts and percentages
+        """
+        manager = await self.get_label_manager()
+        return manager.get_entity_statistics()
+    
+    async def refresh_validator_labels(self) -> None:
+        """Refresh validator label data from sources."""
+        manager = await self.get_label_manager()
+        await manager.refresh()
+    
+    async def get_active_validators_by_entity(self, entity_name: str) -> List[int]:
+        """Get active (non-exited) validator indices for an entity.
+        
+        Args:
+            entity_name: Entity name (e.g., 'coinbase', 'lido')
+            
+        Returns:
+            List of active validator indices
+        """
+        manager = await self.get_label_manager()
+        return manager.get_active_validators_by_entity(entity_name)
+    
+    async def get_exit_statistics(self) -> Dict[str, Any]:
+        """Get statistics about validator exits.
+        
+        Returns:
+            Dictionary with exit statistics including total, active, exited counts
+        """
+        manager = await self.get_label_manager()
+        return manager.get_exit_statistics()
+    
+    async def get_attestation(self, **kwargs) -> pd.DataFrame:
+        """Alias for get_attestations."""
+        return await self.get_attestations(**kwargs)
+    
+    async def get_attestation_event(
+        self,
+        slot: Optional[Union[int, List[int]]] = None,
+        columns: str = "*",
+        network: Union[str, Network] = Network.MAINNET,
+        limit: Optional[int] = None,
+        orderby: Optional[str] = None
+    ) -> pd.DataFrame:
+        """Get attestation event data from beacon API."""
+        self._ensure_connected()
+        
+        params = SlotQueryParams(
+            slot=slot,
+            columns=columns,
+            network=network if isinstance(network, Network) else Network(network),
+            limit=limit,
+            orderby=orderby
+        )
+        
+        return await self._attestation_fetcher.fetch_attestation_events(params)
+    
+    async def get_beacon_block_v2(
+        self,
+        slot: Optional[Union[int, List[int]]] = None,
+        columns: str = "*",
+        network: Union[str, Network] = Network.MAINNET,
+        limit: Optional[int] = None,
+        orderby: Optional[str] = None
+    ) -> pd.DataFrame:
+        """Get beacon block v2 data."""
+        self._ensure_connected()
+        
+        params = SlotQueryParams(
+            slot=slot,
+            columns=columns,
+            network=network if isinstance(network, Network) else Network(network),
+            limit=limit,
+            orderby=orderby
+        )
+        
+        return await self._slot_fetcher.fetch_beacon_blocks_v2(params)
+    
+    async def get_checkpoints(
+        self,
+        slot: Optional[Union[int, List[int]]] = None,
+        columns: str = "*",
+        network: Union[str, Network] = Network.MAINNET,
+        limit: Optional[int] = None,
+        orderby: Optional[str] = None
+    ) -> pd.DataFrame:
+        """Get checkpoint data."""
+        self._ensure_connected()
+        
+        params = SlotQueryParams(
+            slot=slot,
+            columns=columns,
+            network=network if isinstance(network, Network) else Network(network),
+            limit=limit,
+            orderby=orderby
+        )
+        
+        return await self._slot_fetcher.fetch_checkpoints(params)
+    
+    async def get_duties(
+        self,
+        slot: Optional[Union[int, List[int]]] = None,
+        columns: str = "*",
+        network: Union[str, Network] = Network.MAINNET,
+        limit: Optional[int] = None,
+        orderby: Optional[str] = None
+    ) -> pd.DataFrame:
+        """Get attester duty assignments."""
+        self._ensure_connected()
+        
+        params = SlotQueryParams(
+            slot=slot,
+            columns=columns,
+            network=network if isinstance(network, Network) else Network(network),
+            limit=limit,
+            orderby=orderby
+        )
+        
+        return await self._attestation_fetcher.fetch_duties(params)
+    
+    async def get_el_transactions(
+        self,
+        slot: Optional[Union[int, List[int]]] = None,
+        columns: str = "*",
+        network: Union[str, Network] = Network.MAINNET,
+        limit: Optional[int] = None,
+        orderby: Optional[str] = None
+    ) -> pd.DataFrame:
+        """Get execution layer transactions."""
+        self._ensure_connected()
+        
+        params = SlotQueryParams(
+            slot=slot,
+            columns=columns,
+            network=network if isinstance(network, Network) else Network(network),
+            limit=limit,
+            orderby=orderby
+        )
+        
+        return await self._transaction_fetcher.fetch_el_transactions(params)
+    
+    async def get_mempool(
+        self,
+        time_interval: Optional[List[str]] = None,
+        columns: str = "*",
+        network: Union[str, Network] = Network.MAINNET,
+        limit: Optional[int] = None,
+        orderby: Optional[str] = None
+    ) -> pd.DataFrame:
+        """Get mempool transaction data."""
+        self._ensure_connected()
+        
+        params = SlotQueryParams(
+            time_interval=time_interval,
+            columns=columns,
+            network=network if isinstance(network, Network) else Network(network),
+            limit=limit,
+            orderby=orderby
+        )
+        
+        return await self._transaction_fetcher.fetch_mempool_transactions(params)
+    
+    async def get_blobs(
+        self,
+        slot: Optional[Union[int, List[int]]] = None,
+        columns: str = "*",
+        network: Union[str, Network] = Network.MAINNET,
+        limit: Optional[int] = None,
+        orderby: Optional[str] = None
+    ) -> pd.DataFrame:
+        """Get blob sidecar data (EIP-4844)."""
+        self._ensure_connected()
+        
+        params = SlotQueryParams(
+            slot=slot,
+            columns=columns,
+            network=network if isinstance(network, Network) else Network(network),
+            limit=limit,
+            orderby=orderby
+        )
+        
+        return await self._transaction_fetcher.fetch_blob_sidecars(params)
+    
+    async def get_blob_events(
+        self,
+        slot: Optional[Union[int, List[int]]] = None,
+        columns: str = "*",
+        network: Union[str, Network] = Network.MAINNET,
+        limit: Optional[int] = None,
+        orderby: Optional[str] = None
+    ) -> pd.DataFrame:
+        """Get blob event data."""
+        self._ensure_connected()
+        
+        params = SlotQueryParams(
+            slot=slot,
+            columns=columns,
+            network=network if isinstance(network, Network) else Network(network),
+            limit=limit,
+            orderby=orderby
+        )
+        
+        return await self._transaction_fetcher.fetch_blob_events(params)
+    
+    async def get_proposer(self, **kwargs) -> pd.DataFrame:
+        """Alias for get_proposer_duties."""
+        return await self.get_proposer_duties(**kwargs)
+    
+    async def get_blockevent(
+        self,
+        slot: Optional[Union[int, List[int]]] = None,
+        columns: str = "*",
+        network: Union[str, Network] = Network.MAINNET,
+        limit: Optional[int] = None,
+        orderby: Optional[str] = None
+    ) -> pd.DataFrame:
+        """Get block event data."""
+        self._ensure_connected()
+        
+        params = SlotQueryParams(
+            slot=slot,
+            columns=columns,
+            network=network if isinstance(network, Network) else Network(network),
+            limit=limit,
+            orderby=orderby
+        )
+        
+        return await self._validator_fetcher.fetch_block_events(params)
+    
+    async def get_block_size(self, **kwargs) -> pd.DataFrame:
+        """Alias for get_block_sizes."""
+        return await self.get_block_sizes(**kwargs)
+        
+    async def async_get_slots(self, **kwargs) -> pd.DataFrame:
+        return await self.get_slots(**kwargs)
+    
+    async def async_get_attestations(self, **kwargs) -> pd.DataFrame:
+        """Async alias for get_attestations."""
+        return await self.get_attestations(**kwargs)
+    
+    async def async_get_transactions(self, **kwargs) -> pd.DataFrame:
+        """Async alias for get_transactions."""
+        return await self.get_transactions(**kwargs)
+    
     def __repr__(self) -> str:
         """String representation."""
         return (

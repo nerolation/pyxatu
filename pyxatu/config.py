@@ -1,4 +1,4 @@
-"""Configuration management for PyXatu with validation and security."""
+"""Configuration management for PyXatu."""
 
 import os
 import json
@@ -13,21 +13,20 @@ class ClickhouseConfig(BaseModel):
     """ClickHouse connection configuration."""
     model_config = ConfigDict(frozen=True)
     
-    url: str = Field(..., description="ClickHouse server URL")
-    user: str = Field("default", description="ClickHouse username")
-    password: SecretStr = Field(..., description="ClickHouse password")
-    database: str = Field("default", description="Database name")
-    timeout: int = Field(1500, ge=1, le=3600, description="Query timeout in seconds")
-    max_retries: int = Field(3, ge=0, le=10, description="Maximum retry attempts")
-    pool_size: int = Field(10, ge=1, le=100, description="Connection pool size")
+    url: str = Field(...)
+    user: str = Field("default")
+    password: SecretStr = Field(...)
+    database: str = Field("default")
+    timeout: int = Field(1500, ge=1, le=3600)
+    max_retries: int = Field(3, ge=0, le=10)
+    pool_size: int = Field(10, ge=1, le=100)
     
     @field_validator('url')
     @classmethod
     def validate_url(cls, v: str) -> str:
-        """Validate ClickHouse URL format."""
+        """Validate URL format."""
         if not v.startswith(('http://', 'https://')):
             raise ValueError("URL must start with http:// or https://")
-        # Remove trailing slash for consistency
         return v.rstrip('/')
 
 
@@ -35,19 +34,10 @@ class MempoolConfig(BaseModel):
     """Mempool connector configuration."""
     model_config = ConfigDict(frozen=True)
     
-    flashbots_url: str = Field(
-        "https://mempool-dumpster.flashbots.net",
-        description="Flashbots mempool API URL"
-    )
-    blocknative_url: str = Field(
-        "https://api.blocknative.com/v0",
-        description="Blocknative API URL"
-    )
-    cache_dir: Path = Field(
-        Path.home() / ".pyxatu" / "mempool_cache",
-        description="Directory for caching mempool data"
-    )
-    cache_ttl: int = Field(3600, ge=60, description="Cache TTL in seconds")
+    flashbots_url: str = Field("https://mempool-dumpster.flashbots.net")
+    blocknative_url: str = Field("https://api.blocknative.com/v0")
+    cache_dir: Path = Field(Path.home() / ".pyxatu" / "mempool_cache")
+    cache_ttl: int = Field(3600, ge=60)
 
 
 class RelayConfig(BaseModel):

@@ -43,10 +43,9 @@ class QueryParams(BaseModel):
     @field_validator('columns')
     @classmethod
     def validate_columns(cls, v: str) -> str:
-        """Validate column specification."""
+        """Validate columns."""
         if not v or not v.strip():
             return "*"
-        # Basic SQL injection prevention
         forbidden = [';', '--', '/*', '*/', 'DROP', 'DELETE', 'INSERT', 'UPDATE']
         if any(f in v.upper() for f in forbidden):
             raise ValueError("Potentially unsafe SQL in columns")
@@ -60,7 +59,7 @@ class SlotQueryParams(QueryParams):
     @field_validator('slot')
     @classmethod
     def validate_slot(cls, v: Optional[Union[int, List[int]]]) -> Optional[Union[int, List[int]]]:
-        """Validate slot parameter."""
+        """Validate slot."""
         if v is None:
             return v
         if isinstance(v, int):

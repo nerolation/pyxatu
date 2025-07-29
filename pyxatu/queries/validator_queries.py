@@ -16,6 +16,10 @@ class ValidatorDataFetcher(BaseDataFetcher[ValidatorDuty]):
         """Return the primary table name."""
         return 'canonical_beacon_proposer_duty'
         
+    async def fetch(self, params: SlotQueryParams) -> pd.DataFrame:
+        """Implementation of abstract fetch method."""
+        return await self.fetch_proposer_duties(params)
+        
     async def fetch_proposer_duties(self, params: SlotQueryParams) -> pd.DataFrame:
         """Fetch proposer duty assignments."""
         builder = ClickHouseQueryBuilder()

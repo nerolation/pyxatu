@@ -196,3 +196,74 @@ class SlotDataFetcher(BaseDataFetcher[Block]):
             raise ValueError(f"Could not determine all checkpoints for slot {slot}")
             
         return head, target, source
+    
+    async def fetch_checkpoints(self, params: SlotQueryParams) -> pd.DataFrame:
+        """Fetch checkpoint data for slots."""
+        query = f"""
+        SELECT
+            slot,
+            slot_start_date_time,
+            epoch,
+            execution_optimistic,
+            finalized,
+            attestation_source_checkpoint_root,
+            attestation_target_checkpoint_root,
+            meta_consensus_version,
+            meta_network_name
+        FROM canonical_beacon_block
+        WHERE {self._build_where_clause(params)}
+        {self._build_order_clause(params)}
+        {self._build_limit_clause(params)}
+        """
+        
+        return await self.client.execute_query_df(query)
+    
+    async def fetch_beacon_blocks_v2(self, params: SlotQueryParams) -> pd.DataFrame:
+        """Fetch beacon block v2 data."""
+        query = f"""
+        SELECT
+            slot,
+            slot_start_date_time,
+            epoch,
+            block_root,
+            parent_root,
+            state_root,
+            proposer_index,
+            body_attestations_count,
+            body_attestation_aggregation_bits_count,
+            body_voluntary_exits_count,
+            body_slashings_attester_count,
+            body_slashings_proposer_count,
+            body_deposits_count,
+            body_eth1_data_block_hash,
+            body_eth1_data_deposit_root,
+            body_eth1_data_deposit_count,
+            body_graffiti,
+            body_sync_aggregate_sync_committee_bits,
+            body_sync_aggregate_sync_committee_signature,
+            body_execution_payload_block_hash,
+            body_execution_payload_block_number,
+            body_execution_payload_parent_hash,
+            body_execution_payload_fee_recipient,
+            body_execution_payload_state_root,
+            body_execution_payload_receipts_root,
+            body_execution_payload_logs_bloom,
+            body_execution_payload_prev_randao,
+            body_execution_payload_extra_data,
+            body_execution_payload_base_fee_per_gas,
+            body_execution_payload_gas_limit,
+            body_execution_payload_gas_used,
+            body_execution_payload_timestamp,
+            body_execution_payload_transactions_count,
+            body_execution_payload_withdrawals_count,
+            execution_optimistic,
+            finalized,
+            meta_network_name,
+            meta_consensus_version
+        FROM canonical_beacon_block
+        WHERE {self._build_where_clause(params)}
+        {self._build_order_clause(params)}
+        {self._build_limit_clause(params)}
+        """
+        
+        return await self.client.execute_query_df(query)
