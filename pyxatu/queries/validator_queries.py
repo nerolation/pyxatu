@@ -1,7 +1,7 @@
 """Validator-related queries for PyXatu."""
 
 import logging
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 import pandas as pd
 
 from pyxatu.core.base import BaseDataFetcher
@@ -162,3 +162,42 @@ class ValidatorDataFetcher(BaseDataFetcher[ValidatorDuty]):
         slots_df['proposer_index'] = slots_df.apply(update_proposer, axis=1)
         
         return slots_df
+        
+    async def fetch_validators(
+        self,
+        validator_indices: Optional[Union[int, List[int]]] = None,
+        columns: str = "*",
+        network: str = 'mainnet',
+        limit: Optional[int] = None
+    ) -> pd.DataFrame:
+        """Fetch validator data.
+        
+        Args:
+            validator_indices: Single validator index or list of indices
+            columns: Columns to retrieve
+            network: Network name
+            limit: Maximum rows to return
+            
+        Returns:
+            DataFrame with validator data
+        """
+        # Query the canonical_beacon_validators table
+        builder = ClickHouseQueryBuilder()
+        builder.select(columns).from_table('canonical_beacon_validators')
+        
+        # Add validator index filter
+        if validator_indices is not None:
+            if isinstance(validator_indices, int):
+                builder.where('validator_index', '=', validator_indices)
+            else:
+                builder.where_in('validator_index', validator_indices)
+                
+        # Add network filter
+        builder.where('meta_network_name', '=', network)
+        
+        # Add limit
+        if limit:
+            builder.limit(limit)
+            
+        query, query_params = builder.build()
+        return await self.client.execute_query_df(query, query_params)

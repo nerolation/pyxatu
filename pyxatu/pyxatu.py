@@ -23,19 +23,19 @@ def run_async(func):
     """Decorator to run async functions synchronously."""
     @wraps(func)
     def wrapper(*args, **kwargs):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
         try:
-            return loop.run_until_complete(func(*args, **kwargs))
-        finally:
-            # Clean up pending tasks
-            pending = asyncio.all_tasks(loop)
-            for task in pending:
-                task.cancel()
-            if pending:
-                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-            loop.close()
-            asyncio.set_event_loop(None)
+            # Try to get the current event loop
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No loop running, we can use asyncio.run()
+            return asyncio.run(func(*args, **kwargs))
+        else:
+            # Loop is already running (e.g., in Jupyter)
+            # Create a task and run it in the existing loop
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, func(*args, **kwargs))
+                return future.result()
     return wrapper
 
 
@@ -74,8 +74,8 @@ class PyXatu:
         self._validator_fetcher: Optional[ValidatorDataFetcher] = None
         self._label_manager: Optional[ValidatorLabelManager] = None
         
-        # Auto-connect on init
-        self._connect()
+        # Don't auto-connect in __init__ to avoid event loop issues
+        # Connection will happen on first use or explicit connect()
         
     @run_async
     async def _connect(self) -> None:
@@ -102,12 +102,17 @@ class PyXatu:
             self._client = None
             self.logger.info("Closed ClickHouse connection")
             
+    def connect(self) -> None:
+        """Connect to ClickHouse (synchronous wrapper)."""
+        self._connect()
+        
     def close(self) -> None:
         """Close connection."""
         self._close()
         
     def __enter__(self):
         """Context manager entry."""
+        self.connect()
         return self
         
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -117,9 +122,43 @@ class PyXatu:
     def _ensure_connected(self) -> None:
         """Ensure client is connected."""
         if self._client is None:
-            raise RuntimeError(
-                "Not connected to ClickHouse. Connection failed during initialization."
-            )
+            # Try to connect if not already connected
+            self.connect()
+            # If still not connected after attempt, raise error
+            if self._client is None:
+                raise RuntimeError(
+                    "Not connected to ClickHouse. Connection failed."
+                )
+                
+    def _sort_and_reindex_df(self, df: pd.DataFrame, orderby: Optional[str] = None) -> pd.DataFrame:
+        """Sort and reindex a DataFrame.
+        
+        Args:
+            df: DataFrame to sort
+            orderby: Column to sort by (prefix with - for DESC)
+            
+        Returns:
+            Sorted and reindexed DataFrame
+        """
+        if df.empty:
+            return df
+            
+        # Determine sort columns
+        if orderby:
+            # Handle DESC prefix
+            desc = orderby.startswith('-')
+            col = orderby.lstrip('-')
+            if col in df.columns:
+                df = df.sort_values(by=col, ascending=not desc)
+        else:
+            # Default: sort by first column (and second if exists)
+            sort_cols = [df.columns[0]]
+            if len(df.columns) > 1:
+                sort_cols.append(df.columns[1])
+            df = df.sort_values(by=sort_cols)
+            
+        # Reset index
+        return df.reset_index(drop=True)
             
     # Slot/Block queries
     
@@ -127,9 +166,9 @@ class PyXatu:
     async def get_slots(
         self,
         slot: Optional[Union[int, List[int]]] = None,
-        columns: str = "*",
+        columns: Optional[Union[str, List[str]]] = None,
         network: Union[str, Network] = Network.MAINNET,
-        include_missed: bool = True,
+        include_missed: bool = False,
         limit: Optional[int] = None,
         orderby: Optional[str] = None
     ) -> pd.DataFrame:
@@ -137,29 +176,39 @@ class PyXatu:
         
         Args:
             slot: Single slot or range [start, end)
-            columns: Columns to retrieve
+            columns: Columns to retrieve (list of column names or "*" for all)
             network: Network name
-            include_missed: Whether to include missed slots
+            include_missed: Whether to include missed slots (default: False)
             limit: Maximum rows to return
             orderby: Column to order by (prefix with - for DESC)
             
         Returns:
-            DataFrame with slot data
+            DataFrame with slot data, sorted and reindexed
         """
         self._ensure_connected()
         
+        # Handle columns parameter
+        if columns is None:
+            columns_str = "*"
+        elif isinstance(columns, list):
+            columns_str = ", ".join(columns)
+        else:
+            columns_str = columns
+        
         params = SlotQueryParams(
             slot=slot,
-            columns=columns,
+            columns=columns_str,
             network=network if isinstance(network, Network) else Network(network),
             limit=limit,
             orderby=orderby
         )
         
         if include_missed:
-            return await self._slot_fetcher.fetch_with_missed(params)
+            df = await self._slot_fetcher.fetch_with_missed(params)
         else:
-            return await self._slot_fetcher.fetch(params)
+            df = await self._slot_fetcher.fetch(params)
+            
+        return self._sort_and_reindex_df(df, orderby)
             
     @run_async
     async def get_missed_slots(
@@ -181,7 +230,11 @@ class PyXatu:
         network: Union[str, Network] = Network.MAINNET,
         limit: Optional[int] = None
     ) -> pd.DataFrame:
-        """Get chain reorganizations."""
+        """Get chain reorganizations.
+        
+        Returns:
+            DataFrame with reorg data, sorted and reindexed
+        """
         self._ensure_connected()
         
         params = SlotQueryParams(
@@ -190,7 +243,8 @@ class PyXatu:
             limit=limit
         )
         
-        return await self._slot_fetcher.fetch_reorgs(params)
+        df = await self._slot_fetcher.fetch_reorgs(params)
+        return self._sort_and_reindex_df(df)
         
     # Attestation queries
     
@@ -198,7 +252,7 @@ class PyXatu:
     async def get_attestations(
         self,
         slot: Optional[Union[int, List[int]]] = None,
-        columns: str = "*",
+        columns: Optional[Union[str, List[str]]] = None,
         network: Union[str, Network] = Network.MAINNET,
         limit: Optional[int] = None,
         orderby: Optional[str] = None
@@ -207,25 +261,34 @@ class PyXatu:
         
         Args:
             slot: Single slot or range [start, end)
-            columns: Columns to retrieve
+            columns: Columns to retrieve (list of column names or "*" for all)
             network: Network name
             limit: Maximum rows to return
             orderby: Column to order by
             
         Returns:
-            DataFrame with attestation data
+            DataFrame with attestation data, sorted and reindexed
         """
         self._ensure_connected()
         
+        # Handle columns parameter
+        if columns is None:
+            columns_str = "*"
+        elif isinstance(columns, list):
+            columns_str = ", ".join(columns)
+        else:
+            columns_str = columns
+        
         params = SlotQueryParams(
             slot=slot,
-            columns=columns,
+            columns=columns_str,
             network=network if isinstance(network, Network) else Network(network),
             limit=limit,
             orderby=orderby
         )
         
-        return await self._attestation_fetcher.fetch(params)
+        df = await self._attestation_fetcher.fetch(params)
+        return self._sort_and_reindex_df(df, orderby)
         
     @run_async
     async def get_elaborated_attestations(
@@ -236,7 +299,11 @@ class PyXatu:
         include_delay: bool = True,
         network: Union[str, Network] = Network.MAINNET
     ) -> pd.DataFrame:
-        """Get detailed attestation performance data."""
+        """Get detailed attestation performance data.
+        
+        Returns:
+            DataFrame with elaborated attestation data, sorted and reindexed
+        """
         self._ensure_connected()
         
         # Convert slot to range
@@ -259,13 +326,14 @@ class PyXatu:
             
         network_str = network.value if isinstance(network, Network) else network
         
-        return await self._attestation_fetcher.fetch_elaborated_attestations(
+        df = await self._attestation_fetcher.fetch_elaborated_attestations(
             slot_range=slot_range,
             vote_types=vote_types_enum,
             status_filter=status_enum,
             include_delay=include_delay,
             network=network_str
         )
+        return self._sort_and_reindex_df(df)
         
     # Transaction queries
     
@@ -273,45 +341,85 @@ class PyXatu:
     async def get_transactions(
         self,
         slot: Optional[Union[int, List[int]]] = None,
-        columns: str = "*",
+        columns: Optional[Union[str, List[str]]] = None,
         network: Union[str, Network] = Network.MAINNET,
         limit: Optional[int] = None,
         orderby: Optional[str] = None
     ) -> pd.DataFrame:
-        """Get transaction data."""
+        """Get transaction data.
+        
+        Args:
+            slot: Single slot or range [start, end)
+            columns: Columns to retrieve (list of column names or "*" for all)
+            network: Network name
+            limit: Maximum rows to return
+            orderby: Column to order by
+            
+        Returns:
+            DataFrame with transaction data, sorted and reindexed
+        """
         self._ensure_connected()
+        
+        # Handle columns parameter
+        if columns is None:
+            columns_str = "*"
+        elif isinstance(columns, list):
+            columns_str = ", ".join(columns)
+        else:
+            columns_str = columns
         
         params = SlotQueryParams(
             slot=slot,
-            columns=columns,
+            columns=columns_str,
             network=network if isinstance(network, Network) else Network(network),
             limit=limit,
             orderby=orderby
         )
         
-        return await self._transaction_fetcher.fetch(params)
+        df = await self._transaction_fetcher.fetch(params)
+        return self._sort_and_reindex_df(df, orderby)
         
     @run_async
     async def get_withdrawals(
         self,
         slot: Optional[Union[int, List[int]]] = None,
-        columns: str = "*",
+        columns: Optional[Union[str, List[str]]] = None,
         network: Union[str, Network] = Network.MAINNET,
         limit: Optional[int] = None,
         orderby: Optional[str] = None
     ) -> pd.DataFrame:
-        """Get withdrawal data."""
+        """Get withdrawal data.
+        
+        Args:
+            slot: Single slot or range [start, end)
+            columns: Columns to retrieve (list of column names or "*" for all)
+            network: Network name
+            limit: Maximum rows to return
+            orderby: Column to order by
+            
+        Returns:
+            DataFrame with withdrawal data, sorted and reindexed
+        """
         self._ensure_connected()
+        
+        # Handle columns parameter
+        if columns is None:
+            columns_str = "*"
+        elif isinstance(columns, list):
+            columns_str = ", ".join(columns)
+        else:
+            columns_str = columns
         
         params = SlotQueryParams(
             slot=slot,
-            columns=columns,
+            columns=columns_str,
             network=network if isinstance(network, Network) else Network(network),
             limit=limit,
             orderby=orderby
         )
         
-        return await self._transaction_fetcher.fetch_withdrawals(params)
+        df = await self._transaction_fetcher.fetch_withdrawals(params)
+        return self._sort_and_reindex_df(df, orderby)
         
     # Validator queries
     
@@ -319,21 +427,40 @@ class PyXatu:
     async def get_validators(
         self,
         validator_indices: Optional[Union[int, List[int]]] = None,
-        columns: str = "*",
+        columns: Optional[Union[str, List[str]]] = None,
         network: Union[str, Network] = Network.MAINNET,
         limit: Optional[int] = None
     ) -> pd.DataFrame:
-        """Get validator data."""
+        """Get validator data.
+        
+        Args:
+            validator_indices: Single validator index or list of indices
+            columns: Columns to retrieve (list of column names or "*" for all)
+            network: Network name
+            limit: Maximum rows to return
+            
+        Returns:
+            DataFrame with validator data, sorted and reindexed
+        """
         self._ensure_connected()
+        
+        # Handle columns parameter
+        if columns is None:
+            columns_str = "*"
+        elif isinstance(columns, list):
+            columns_str = ", ".join(columns)
+        else:
+            columns_str = columns
         
         network_str = network.value if isinstance(network, Network) else network
         
-        return await self._validator_fetcher.fetch_validators(
+        df = await self._validator_fetcher.fetch_validators(
             validator_indices=validator_indices,
-            columns=columns,
+            columns=columns_str,
             network=network_str,
             limit=limit
         )
+        return self._sort_and_reindex_df(df)
         
     async def _get_label_manager(self) -> ValidatorLabelManager:
         """Get or create label manager."""
@@ -347,13 +474,18 @@ class PyXatu:
         indices: Optional[Union[int, List[int]]] = None,
         refresh: bool = False
     ) -> pd.DataFrame:
-        """Get validator labels with entity mapping."""
+        """Get validator labels with entity mapping.
+        
+        Returns:
+            DataFrame with validator labels, sorted and reindexed
+        """
         manager = await self._get_label_manager()
         
         if refresh:
             await manager.refresh_labels()
             
-        return manager.get_labels(indices)
+        df = manager.get_labels(indices)
+        return self._sort_and_reindex_df(df)
         
     @run_async
     async def get_validator_labels_bulk(
@@ -378,9 +510,14 @@ class PyXatu:
         
     @run_async
     async def get_entity_statistics(self) -> pd.DataFrame:
-        """Get statistics about validator entities."""
+        """Get statistics about validator entities.
+        
+        Returns:
+            DataFrame with entity statistics, sorted and reindexed
+        """
         manager = await self._get_label_manager()
-        return manager.get_entity_statistics()
+        df = manager.get_entity_statistics()
+        return self._sort_and_reindex_df(df)
         
     @run_async
     async def refresh_validator_labels(self) -> None:
@@ -403,16 +540,21 @@ class PyXatu:
             params: Query parameters for safe substitution
             
         Returns:
-            DataFrame with query results
+            DataFrame with query results, sorted and reindexed
         """
         self._ensure_connected()
         self.logger.warning("Executing raw SQL query - ensure it's properly sanitized")
-        return await self._client.execute_query_df(query, params)
+        df = await self._client.execute_query_df(query, params)
+        return self._sort_and_reindex_df(df)
         
     def raw_query(
         self,
         query: str,
         params: Optional[Dict[str, Any]] = None
     ) -> pd.DataFrame:
-        """Execute raw SQL query (alias for execute_query)."""
+        """Execute raw SQL query (alias for execute_query).
+        
+        Returns:
+            DataFrame with query results, sorted and reindexed
+        """
         return self.execute_query(query, params)
