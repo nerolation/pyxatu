@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field, SecretStr, field_validator, ConfigDict
-from pyxatu.base import ConfigProvider
+from pyxatu.core.base import ConfigProvider
 
 
 class ClickhouseConfig(BaseModel):

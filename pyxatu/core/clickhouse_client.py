@@ -11,7 +11,7 @@ import aiohttp
 from aiohttp import BasicAuth, ClientTimeout
 import backoff
 
-from pyxatu.base import BaseClient
+from pyxatu.core.base import BaseClient
 from pyxatu.config import ClickhouseConfig
 from pyxatu.schema import get_schema_manager
 
@@ -86,10 +86,20 @@ class ClickHouseQueryBuilder:
                 raise ValueError(f"Value for {operator} must be a list or tuple")
             placeholder = f"({', '.join(['%(' + param_name + f'_{i})s' for i in range(len(value))])})"
             for i, v in enumerate(value):
-                self._parameters[f"{param_name}_{i}"] = v
+                # Add quotes around string values and escape single quotes
+                if isinstance(v, str):
+                    escaped_v = v.replace("'", "\\'")
+                    self._parameters[f"{param_name}_{i}"] = f"'{escaped_v}'"
+                else:
+                    self._parameters[f"{param_name}_{i}"] = v
             condition = f"{column} {operator} {placeholder}"
         else:
-            self._parameters[param_name] = value
+            # Add quotes around string values and escape single quotes
+            if isinstance(value, str):
+                escaped_value = value.replace("'", "\\'")
+                self._parameters[param_name] = f"'{escaped_value}'"
+            else:
+                self._parameters[param_name] = value
             condition = f"{column} {operator} %({param_name})s"
             
         self._where_conditions.append(condition)
@@ -101,8 +111,18 @@ class ClickHouseQueryBuilder:
         param_end = f"param_{self._param_counter + 1}"
         self._param_counter += 2
         
-        self._parameters[param_start] = start
-        self._parameters[param_end] = end
+        # Add quotes around string values and escape single quotes
+        if isinstance(start, str):
+            escaped_start = start.replace("'", "\\'")
+            self._parameters[param_start] = f"'{escaped_start}'"
+        else:
+            self._parameters[param_start] = start
+            
+        if isinstance(end, str):
+            escaped_end = end.replace("'", "\\'")
+            self._parameters[param_end] = f"'{escaped_end}'"
+        else:
+            self._parameters[param_end] = end
         
         condition = f"{column} BETWEEN %({param_start})s AND %({param_end})s"
         self._where_conditions.append(condition)
@@ -154,7 +174,7 @@ class ClickHouseQueryBuilder:
     def where_raw(self, condition: str, params: Optional[Dict[str, Any]] = None) -> 'ClickHouseQueryBuilder':
         """Add raw WHERE condition (use with caution)."""
         # Basic validation to prevent obvious SQL injection
-        forbidden = [';', '--', '/*', '*/', 'DROP', 'DELETE', 'TRUNCATE', 'ALTER']
+        forbidden = [';', '--', '/*', '*/', 'DROP', 'DELETE', 'TRUNCATE', 'ALTER', 'UNION', 'INSERT', 'UPDATE']
         if any(word in condition.upper() for word in forbidden):
             raise ValueError("Potentially unsafe SQL detected in condition")
             
@@ -232,7 +252,7 @@ class ClickHouseClient(BaseClient):
         self._auth = BasicAuth(config.user, config.password.get_secret_value())
         self._timeout = ClientTimeout(total=config.timeout)
         
-    async def _get_session(self) -> aiohttp.ClientSession:
+    def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session with connection pooling."""
         if self._session is None or self._session.closed:
             connector = aiohttp.TCPConnector(
@@ -258,38 +278,45 @@ class ClickHouseClient(BaseClient):
         params: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """Execute a query and return results as list of dicts."""
-        session = await self._get_session()
+        # Create a new session for each request to avoid event loop issues
+        connector = aiohttp.TCPConnector(force_close=True)
+        timeout = ClientTimeout(total=self.config.timeout)
         
-        # Format query with parameters if provided
-        if params:
-            formatted_query = query % params
-        else:
-            formatted_query = query
-            
-        self.logger.debug(f"Executing query: {formatted_query[:200]}...")
-        
-        async with session.get(
-            f"{self.config.url}/",
-            params={
-                'query': formatted_query,
-                'database': self.config.database,
-                'default_format': 'JSONEachRow'
-            }
-        ) as response:
-            response.raise_for_status()
-            text = await response.text()
-            
-            if not text.strip():
-                return []
+        async with aiohttp.ClientSession(
+            connector=connector,
+            auth=self._auth,
+            timeout=timeout
+        ) as session:
+            # Format query with parameters if provided
+            if params:
+                formatted_query = query % params
+            else:
+                formatted_query = query
                 
-            # Parse JSON lines
-            results = []
-            for line in text.strip().split('\n'):
-                if line:
-                    import json
-                    results.append(json.loads(line))
+            self.logger.debug(f"Executing query: {formatted_query[:200]}...")
+            
+            async with session.get(
+                f"{self.config.url}/",
+                params={
+                    'query': formatted_query,
+                    'database': self.config.database,
+                    'default_format': 'JSONEachRow'
+                }
+            ) as response:
+                response.raise_for_status()
+                text = await response.text()
+                
+                if not text.strip():
+                    return []
                     
-            return results
+                # Parse JSON lines
+                results = []
+                for line in text.strip().split('\n'):
+                    if line:
+                        import json
+                        results.append(json.loads(line))
+                        
+                return results
             
     async def execute_query_df(
         self, 
@@ -297,32 +324,39 @@ class ClickHouseClient(BaseClient):
         params: Optional[Dict[str, Any]] = None
     ) -> pd.DataFrame:
         """Execute a query and return results as pandas DataFrame."""
-        session = await self._get_session()
+        # Create a new session for each request to avoid event loop issues
+        connector = aiohttp.TCPConnector(force_close=True)
+        timeout = ClientTimeout(total=self.config.timeout)
         
-        # Format query with parameters if provided
-        if params:
-            formatted_query = query % params
-        else:
-            formatted_query = query
-            
-        self.logger.debug(f"Executing query for DataFrame: {formatted_query[:200]}...")
-        
-        async with session.get(
-            f"{self.config.url}/",
-            params={
-                'query': formatted_query,
-                'database': self.config.database,
-                'default_format': 'TSVWithNames'
-            }
-        ) as response:
-            response.raise_for_status()
-            text = await response.text()
-            
-            if not text.strip():
-                return pd.DataFrame()
+        async with aiohttp.ClientSession(
+            connector=connector,
+            auth=self._auth,
+            timeout=timeout
+        ) as session:
+            # Format query with parameters if provided
+            if params:
+                formatted_query = query % params
+            else:
+                formatted_query = query
                 
-            # Parse TSV into DataFrame
-            return pd.read_csv(StringIO(text), sep='\t')
+            self.logger.debug(f"Executing query for DataFrame: {formatted_query[:200]}...")
+            
+            async with session.get(
+                f"{self.config.url}/",
+                params={
+                    'query': formatted_query,
+                    'database': self.config.database,
+                    'default_format': 'TSVWithNames'
+                }
+            ) as response:
+                response.raise_for_status()
+                text = await response.text()
+                
+                if not text.strip():
+                    return pd.DataFrame()
+                    
+                # Parse TSV into DataFrame
+                return pd.read_csv(StringIO(text), sep='\t')
             
     async def execute_query_stream(
         self,
@@ -331,7 +365,7 @@ class ClickHouseClient(BaseClient):
         chunk_size: int = 1000
     ):
         """Execute a query and yield results in chunks."""
-        session = await self._get_session()
+        session = self._get_session()
         
         if params:
             formatted_query = query % params
@@ -393,3 +427,4 @@ class ClickHouseClient(BaseClient):
         """Close the client connection."""
         if self._session and not self._session.closed:
             await self._session.close()
+        self._session = None

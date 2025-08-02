@@ -20,7 +20,7 @@ from rich import box
 import importlib.resources as resources
 import shutil
 
-from .pyxatu import PyXatu
+from . import PyXatu
 from .utils import slot_to_timestamp, timestamp_to_slot
 from .schema import get_schema_manager, TableInfo
 
@@ -214,7 +214,7 @@ def setup():
     user_config_path = home / '.pyxatu_config.json'
     
     try:
-        default_config_file = resources.files('pyxatu') / 'config.json'
+        default_config_file = resources.files('pyxatu.data') / 'config.json'
         
         if not user_config_path.exists():
             shutil.copy(default_config_file, user_config_path)
@@ -848,176 +848,126 @@ def labels():
 @labels.command('stats')
 def label_stats():
     """Show statistics about validator entities."""
-    import asyncio
-    
-    async def show_stats():
-        xatu = PyXatu()
-        await xatu.connect()
-        try:
-            stats = await xatu.get_entity_statistics()
-            
-            if stats.empty:
-                console.print("[yellow]No entity statistics available. Run 'xatu labels refresh' first.[/yellow]")
-                return
-            
-            console.print("[bold]Validator Entity Statistics:[/bold]\n")
-            
-            # Create a table
-            table = Table(box=box.ROUNDED)
-            table.add_column("Entity", style="cyan")
-            table.add_column("Validators", justify="right", style="green")
-            table.add_column("Percentage", justify="right")
-            
-            for _, row in stats.iterrows():
-                table.add_row(
-                    row['entity'],
-                    f"{row['validator_count']:,}",
-                    f"{row['percentage']:.2f}%"
-                )
-            
-            console.print(table)
-            
-            total = stats['validator_count'].sum()
-            console.print(f"\n[dim]Total labeled validators: {total:,}[/dim]")
-            
-        finally:
-            await xatu.close()
-    
-    asyncio.run(show_stats())
+    with PyXatu() as xatu:
+        stats = xatu.get_entity_statistics()
+        
+        if stats.empty:
+            console.print("[yellow]No entity statistics available. Run 'xatu labels refresh' first.[/yellow]")
+            return
+        
+        console.print("[bold]Validator Entity Statistics:[/bold]\n")
+        
+        # Create a table
+        table = Table(box=box.ROUNDED)
+        table.add_column("Entity", style="cyan")
+        table.add_column("Validators", justify="right", style="green")
+        table.add_column("Percentage", justify="right")
+        
+        for _, row in stats.iterrows():
+            table.add_row(
+                row['entity'],
+                f"{row['validator_count']:,}",
+                f"{row['percentage']:.2f}%"
+            )
+        
+        console.print(table)
+        
+        total = stats['validator_count'].sum()
+        console.print(f"\n[dim]Total labeled validators: {total:,}[/dim]")
 
 @labels.command('lookup')
 @click.argument('validator_indices', nargs=-1, type=int, required=True)
 def label_lookup(validator_indices):
     """Look up entity labels for validator indices."""
-    import asyncio
-    
-    async def lookup():
-        xatu = PyXatu()
-        await xatu.connect()
-        try:
-            labels = await xatu.get_validator_labels(list(validator_indices))
-            
-            console.print("[bold]Validator Labels:[/bold]\n")
-            
-            for idx in validator_indices:
-                label = labels.get(idx)
-                if label:
-                    console.print(f"  {idx}: [green]{label}[/green]")
-                else:
-                    console.print(f"  {idx}: [dim]Unknown[/dim]")
-                    
-        finally:
-            await xatu.close()
-    
-    asyncio.run(lookup())
+    with PyXatu() as xatu:
+        labels = xatu.get_validator_labels_bulk(list(validator_indices))
+        
+        console.print("[bold]Validator Labels:[/bold]\n")
+        
+        for idx in validator_indices:
+            label = labels.get(idx)
+            if label:
+                console.print(f"  {idx}: [green]{label}[/green]")
+            else:
+                console.print(f"  {idx}: [dim]Unknown[/dim]")
 
 @labels.command('entity')
 @click.argument('entity_name')
 @click.option('--limit', '-l', type=int, default=10, help='Number of validators to show')
 def label_entity(entity_name, limit):
     """Show validators for a specific entity."""
-    import asyncio
-    
-    async def show_entity():
-        xatu = PyXatu()
-        await xatu.connect()
-        try:
-            validators = await xatu.get_validators_by_entity(entity_name)
-            
-            if not validators:
-                console.print(f"[yellow]No validators found for entity '{entity_name}'[/yellow]")
-                return
-            
-            console.print(f"[bold]Validators for {entity_name}:[/bold]")
-            console.print(f"Total: {len(validators):,} validators\n")
-            
-            # Show sample
-            sample = validators[:limit]
-            for idx in sample:
-                console.print(f"  • {idx}")
-            
-            if len(validators) > limit:
-                console.print(f"\n[dim]... and {len(validators) - limit:,} more[/dim]")
-                
-        finally:
-            await xatu.close()
-    
-    asyncio.run(show_entity())
+    with PyXatu() as xatu:
+        validators = xatu.get_validators_by_entity(entity_name)
+        
+        if not validators:
+            console.print(f"[yellow]No validators found for entity '{entity_name}'[/yellow]")
+            return
+        
+        console.print(f"[bold]Validators for {entity_name}:[/bold]")
+        console.print(f"Total: {len(validators):,} validators\n")
+        
+        # Show sample
+        sample = validators[:limit]
+        for idx in sample:
+            console.print(f"  • {idx}")
+        
+        if len(validators) > limit:
+            console.print(f"\n[dim]... and {len(validators) - limit:,} more[/dim]")
 
 @labels.command('refresh')
 def label_refresh():
     """Refresh validator label data from sources."""
-    import asyncio
-    
-    async def refresh():
-        xatu = PyXatu()
-        await xatu.connect()
-        try:
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                transient=True,
-            ) as progress:
-                progress.add_task(description="Refreshing validator labels...", total=None)
-                await xatu.refresh_validator_labels()
-            
-            console.print("[green]✓[/green] Validator labels refreshed successfully")
-            
-            # Show updated stats
-            stats = await xatu.get_entity_statistics()
-            if not stats.empty:
-                total = stats['validator_count'].sum()
-                console.print(f"\nTotal labeled validators: {total:,}")
-                console.print(f"Total entities: {len(stats)}")
-                
-        finally:
-            await xatu.close()
-    
-    asyncio.run(refresh())
+    with PyXatu() as xatu:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            transient=True,
+        ) as progress:
+            progress.add_task(description="Refreshing validator labels...", total=None)
+            xatu.refresh_validator_labels()
+        
+        console.print("[green]✓[/green] Validator labels refreshed successfully")
+        
+        # Show updated stats
+        stats = xatu.get_entity_statistics()
+        if not stats.empty:
+            total = stats['validator_count'].sum()
+            console.print(f"\nTotal labeled validators: {total:,}")
+            console.print(f"Total entities: {len(stats)}")
 
 @labels.command('lido-operators')
 def label_lido_operators():
     """Show Lido node operators and their validator counts."""
-    import asyncio
-    
-    async def show_lido():
-        xatu = PyXatu()
-        await xatu.connect()
-        try:
-            manager = await xatu.get_label_manager()
-            operators = await manager.get_lido_operators()
-            
-            if not operators:
-                console.print("[yellow]No Lido operators found. Run 'xatu labels refresh' first.[/yellow]")
-                return
-            
-            console.print("[bold]Lido Node Operators:[/bold]\n")
-            
-            # Create a table
-            table = Table(box=box.ROUNDED)
-            table.add_column("ID", style="dim")
-            table.add_column("Operator Name", style="cyan")
-            table.add_column("Validators", justify="right", style="green")
-            table.add_column("Percentage", justify="right")
-            
-            total_validators = sum(op['validator_count'] for op in operators)
-            
-            for op in operators:
-                percentage = (op['validator_count'] / total_validators * 100) if total_validators > 0 else 0
-                table.add_row(
-                    str(op['id']),
-                    op['name'],
-                    f"{op['validator_count']:,}",
-                    f"{percentage:.2f}%"
-                )
-            
-            console.print(table)
-            console.print(f"\n[dim]Total Lido validators: {total_validators:,}[/dim]")
-            
-        finally:
-            await xatu.close()
-    
-    asyncio.run(show_lido())
+    with PyXatu() as xatu:
+        manager = xatu.get_label_manager()
+        operators = manager.get_lido_operators()
+        
+        if not operators:
+            console.print("[yellow]No Lido operators found. Run 'xatu labels refresh' first.[/yellow]")
+            return
+        
+        console.print("[bold]Lido Node Operators:[/bold]\n")
+        
+        # Create a table
+        table = Table(box=box.ROUNDED)
+        table.add_column("ID", style="dim")
+        table.add_column("Operator Name", style="cyan")
+        table.add_column("Validators", justify="right", style="green")
+        table.add_column("Percentage", justify="right")
+        
+        total_validators = sum(op['validator_count'] for op in operators)
+        
+        for op in operators:
+            percentage = (op['validator_count'] / total_validators * 100) if total_validators > 0 else 0
+            table.add_row(
+                str(op['id']),
+                op['name'],
+                f"{op['validator_count']:,}",
+                f"{percentage:.2f}%"
+            )
+        
+        console.print(table)
+        console.print(f"\n[dim]Total Lido validators: {total_validators:,}[/dim]")
 
 @cli.command()
 @click.argument('method_name')

@@ -1,6 +1,6 @@
 # PyXatu
 
-Python client for querying Ethereum beacon chain data from Xatu.
+Python client for Ethereum beacon chain data from Xatu.
 
 ## Installation
 
@@ -8,18 +8,27 @@ Python client for querying Ethereum beacon chain data from Xatu.
 pip install pyxatu
 ```
 
+## Quick Start
+
+```python
+from pyxatu import PyXatu
+
+# Simple query
+with PyXatu() as xatu:
+    slots = xatu.get_slots(limit=10)
+    print(slots)
+```
+
 ## Configuration
 
 ### Environment Variables
-
 ```bash
 export CLICKHOUSE_URL="https://your-clickhouse-server.com"
 export CLICKHOUSE_USER="your_username"
 export CLICKHOUSE_PASSWORD="your_password"
 ```
 
-### Configuration File
-
+### Config File
 Create `~/.pyxatu_config.json`:
 ```json
 {
@@ -31,141 +40,288 @@ Create `~/.pyxatu_config.json`:
 }
 ```
 
-## Usage
+## Examples
 
-### Basic Queries
+### Slots & Blocks
 
 ```python
-import asyncio
 from pyxatu import PyXatu, Network
 
-async def main():
-    async with PyXatu() as xatu:
-        # Query slots
-        slots = await xatu.get_slots(
-            slot=[9000000, 9000010],
-            network=Network.MAINNET
-        )
-        
-        # Query attestations
-        attestations = await xatu.get_attestations(
-            slot=9000000,
-            network=Network.MAINNET
-        )
+xatu = PyXatu()
 
-asyncio.run(main())
+# Get recent blocks
+blocks = xatu.get_slots(limit=100)
+
+# Get specific slot range
+blocks = xatu.get_slots(
+    slot=[9000000, 9000100],  # Start and end slot
+    network=Network.MAINNET
+)
+
+# Include missed slots
+all_slots = xatu.get_slots(
+    slot=[9000000, 9000100],
+    include_missed=True
+)
+
+# Get only missed slots
+missed = xatu.get_missed_slots(slot_range=[9000000, 9001000])
+
+# Get reorganizations
+reorgs = xatu.get_reorgs(limit=10)
 ```
 
-### Slot Analysis
+### Attestations
 
 ```python
-async with PyXatu() as xatu:
-    # Include missed slots
-    slots = await xatu.get_slots(
-        slot=[9000000, 9000100],
-        include_missed=True,
-        network=Network.MAINNET
-    )
-    
-    # Get missed slots only
-    missed = await xatu.get_missed_slots(
-        slot_range=[9000000, 9000100]
-    )
+# Basic attestation query
+attestations = xatu.get_attestations(
+    slot=9000000,
+    limit=100
+)
+
+# Detailed attestation analysis
+performance = xatu.get_elaborated_attestations(
+    slot=[9000000, 9000100],
+    vote_types=['source', 'target', 'head'],
+    status_filter=['correct'],
+    include_delay=True
+)
 ```
 
-### Attestation Performance
+### Validator Labels
 
 ```python
-async with PyXatu() as xatu:
-    # Analyze attestation performance
-    performance = await xatu.get_elaborated_attestations(
-        slot=[9000000, 9000010],
-        vote_types=['source', 'target', 'head'],
-        status_filter=['correct', 'failed'],
-        include_delay=True
-    )
+# Get label for single validator
+label = xatu.get_validator_labels(indices=100)
+
+# Bulk lookup
+labels = xatu.get_validator_labels_bulk([100, 200, 300])
+# Returns: {100: 'lido', 200: 'coinbase', 300: None}
+
+# Get validators by entity
+lido_validators = xatu.get_validators_by_entity('lido')
+
+# Get entity statistics
+stats = xatu.get_entity_statistics()
 ```
 
-### Transaction Analysis
+### Transactions
 
 ```python
-async with PyXatu() as xatu:
-    # Analyze transaction privacy
-    transactions = await xatu.get_elaborated_transactions(
-        slots=[9000000, 9000001, 9000002],
-        include_external_mempool=True
-    )
-    
-    # Get block metrics
-    block_sizes = await xatu.get_block_sizes(
-        slot=[9000000, 9001000],
-        orderby="-blobs"
-    )
+# Get transactions
+txs = xatu.get_transactions(
+    slot=[9000000, 9000010],
+    limit=1000
+)
+
+# Get withdrawals
+withdrawals = xatu.get_withdrawals(
+    slot=[9000000, 9001000],
+    orderby="-amount"
+)
 ```
 
-## API Reference
+### Raw SQL Queries
 
-### Main Methods
-
-- `get_slots()` - Query beacon chain blocks
-- `get_attestations()` - Query attestations
-- `get_elaborated_attestations()` - Detailed attestation analysis
-- `get_transactions()` - Query transactions
-- `get_elaborated_transactions()` - Transaction privacy analysis
-- `get_withdrawals()` - Query validator withdrawals
-- `get_block_sizes()` - Block size metrics
-- `get_proposer_duties()` - Proposer assignments
-
-### Parameters
-
-All query methods accept:
-- `slot`: Single slot or range [start, end)
-- `network`: Network enum (MAINNET, SEPOLIA, HOLESKY)
-- `columns`: Columns to retrieve (default: "*")
-- `limit`: Maximum rows to return
-- `orderby`: Sort column (prefix with - for DESC)
-
-## Architecture
-
-```
-pyxatu/
-├── pyxatu.py              # Main interface
-├── models.py              # Data models
-├── config.py              # Configuration
-├── clickhouse_client.py   # Database client
-├── queries/               # Query modules
-│   ├── slot_queries.py
-│   ├── attestation_queries.py
-│   ├── transaction_queries.py
-│   └── validator_queries.py
-├── mempool_connector.py   # Mempool integration
-└── relay_connector.py     # MEV relay connector
+```python
+# Execute custom queries
+result = xatu.raw_query("""
+    SELECT 
+        slot DIV 32 as epoch,
+        count() as blocks,
+        avg(block_total_bytes) as avg_size
+    FROM canonical_beacon_block
+    WHERE slot BETWEEN %(start)s AND %(end)s
+    GROUP BY epoch
+    ORDER BY epoch
+""", params={'start': 9000000, 'end': 9100000})
 ```
 
-## Technical Details
+## CLI Usage
 
-### Performance Optimizations
-
-- **Partition Filtering**: Automatic `slot_start_date_time` filtering prevents full table scans
-- **Connection Pooling**: Reuses database connections
-- **Async Operations**: Non-blocking I/O for concurrent queries
-- **Batch Processing**: Efficient handling of large datasets
-
-### Security
-
-- Parameterized queries prevent SQL injection
-- Input validation on all parameters
-- Secure credential storage with SecretStr
-- Table whitelist enforcement
-
-## Testing
-
+### Basic Queries
 ```bash
-# Run tests
-pytest
+# Query slots
+xatu slots query --slot 9000000:9000100
 
-# Run with coverage
-pytest --cov=pyxatu --cov-report=html
+# Get attestations
+xatu attestations query --slot 9000000 --limit 100
+
+# Export to CSV
+xatu slots query --slot 9000000:9000100 --format csv --output blocks.csv
+```
+
+### Advanced CLI
+```bash
+# Raw SQL query
+xatu query "SELECT * FROM canonical_beacon_block WHERE slot = 9000000"
+
+# Complex analysis
+xatu query "
+    SELECT 
+        proposer_index,
+        count() as blocks,
+        avg(block_total_bytes) as avg_size
+    FROM canonical_beacon_block
+    WHERE slot BETWEEN 9000000 AND 9100000
+    GROUP BY proposer_index
+    ORDER BY blocks DESC
+    LIMIT 10
+" --format json
+
+# Validator performance
+xatu attestations elaborated --slot 9000000:9000100 --format csv
+```
+
+### Validator Labels CLI
+```bash
+# Get entity statistics
+xatu labels stats
+
+# Look up specific validators
+xatu labels lookup 100 200 300
+
+# Show validators for entity
+xatu labels entity lido --limit 20
+
+# Refresh labels
+xatu labels refresh
+```
+
+## Advanced Usage
+
+### Working with DataFrames
+```python
+import pandas as pd
+
+with PyXatu() as xatu:
+    # Get data as DataFrame
+    slots = xatu.get_slots(slot=[9000000, 9000100])
+    
+    # Add validator labels
+    if 'proposer_index' in slots.columns:
+        proposer_labels = xatu.get_validator_labels_bulk(
+            slots['proposer_index'].unique().tolist()
+        )
+        slots['proposer_entity'] = slots['proposer_index'].map(proposer_labels)
+    
+    # Analyze by entity
+    by_entity = slots.groupby('proposer_entity').size()
+    print(by_entity)
+```
+
+### Performance Analysis
+```python
+# Comprehensive validator performance
+attestations = xatu.get_elaborated_attestations(
+    slot=[9000000, 9010000],
+    include_delay=True
+)
+
+# Get validator labels
+validator_indices = attestations['attesting_validator_index'].unique()
+labels = xatu.get_validator_labels_bulk(validator_indices.tolist())
+
+# Add labels to DataFrame
+attestations['entity'] = attestations['attesting_validator_index'].map(labels)
+
+# Analyze by entity
+entity_stats = attestations.groupby('entity').agg({
+    'source_vote': 'mean',
+    'target_vote': 'mean',
+    'head_vote': 'mean',
+    'inclusion_delay': 'mean'
+}).round(4)
+
+print(entity_stats)
+```
+
+### MEV Analysis
+```python
+# Query MEV relay data
+mev_blocks = xatu.raw_query("""
+    SELECT 
+        slot,
+        relay,
+        builder_pubkey,
+        value_wei / 1e18 as value_eth
+    FROM mev_relay_bid_trace
+    WHERE slot BETWEEN %(start)s AND %(end)s
+    ORDER BY value_wei DESC
+    LIMIT 100
+""", params={'start': 9000000, 'end': 9001000})
+```
+
+### Large Dataset Handling
+```python
+# Process in chunks for memory efficiency
+chunk_size = 10000
+start_slot = 9000000
+end_slot = 9100000
+
+results = []
+for chunk_start in range(start_slot, end_slot, chunk_size):
+    chunk_end = min(chunk_start + chunk_size, end_slot)
+    
+    chunk_data = xatu.get_slots(
+        slot=[chunk_start, chunk_end],
+        columns="slot,proposer_index,block_total_bytes"
+    )
+    
+    # Process chunk
+    results.append(chunk_data.groupby('proposer_index').size())
+
+# Combine results
+final_result = pd.concat(results).groupby(level=0).sum()
+```
+
+## Available Tables
+
+### Core Tables
+- `canonical_beacon_block` - Beacon blocks
+- `canonical_beacon_attestation` - Attestations  
+- `canonical_beacon_block_execution_transaction` - Transactions
+- `canonical_beacon_block_withdrawal` - Withdrawals
+- `canonical_beacon_proposer_duty` - Proposer assignments
+- `canonical_beacon_elaborated_attestation` - Attestation metrics
+
+### MEV Tables
+- `mev_relay_bid_trace` - Relay bids
+- `mev_relay_proposer_payload_delivered` - Delivered payloads
+
+### Event Tables
+- `beacon_api_eth_v1_events_attestation` - Attestation events
+- `beacon_api_eth_v1_events_block` - Block events
+- `beacon_api_eth_v1_events_chain_reorg` - Reorg events
+
+## Networks
+
+- `Network.MAINNET` (default)
+- `Network.SEPOLIA` 
+- `Network.HOLESKY`
+
+## Performance Tips
+
+1. **Use specific columns**: Don't use `*` for large queries
+2. **Filter by slot**: Always include slot ranges for partitioning
+3. **Batch operations**: Process multiple items together
+4. **Use context manager**: Ensures proper connection cleanup
+
+## Error Handling
+
+```python
+from pyxatu import PyXatu
+
+try:
+    xatu = PyXatu()
+    slots = xatu.get_slots(slot=9000000)
+except ConnectionError:
+    print("Failed to connect to ClickHouse")
+except Exception as e:
+    print(f"Query failed: {e}")
+finally:
+    xatu.close()
 ```
 
 ## License

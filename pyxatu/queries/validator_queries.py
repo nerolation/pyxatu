@@ -4,9 +4,9 @@ import logging
 from typing import List, Optional, Dict, Any
 import pandas as pd
 
-from pyxatu.base import BaseDataFetcher
+from pyxatu.core.base import BaseDataFetcher
 from pyxatu.models import ValidatorDuty, SlotQueryParams
-from pyxatu.clickhouse_client import ClickHouseQueryBuilder
+from pyxatu.core.clickhouse_client import ClickHouseQueryBuilder
 
 
 class ValidatorDataFetcher(BaseDataFetcher[ValidatorDuty]):

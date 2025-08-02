@@ -13,7 +13,7 @@ import aiofiles
 from aiohttp import ClientTimeout
 import backoff
 
-from pyxatu.base import BaseConnector
+from pyxatu.core.base import BaseConnector
 from pyxatu.config import MempoolConfig
 
 

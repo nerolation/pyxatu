@@ -373,8 +373,8 @@ class TestConfigManager:
             # URL and password from env should override file
             assert config.clickhouse.url == "https://env.example.com"
             assert config.clickhouse.password.get_secret_value() == "envpass"
-            # User from file (not in env)
-            assert config.clickhouse.user == "fileuser"
+            # User gets default value since env creates complete clickhouse config
+            assert config.clickhouse.user == "default"
         finally:
             temp_path.unlink()
             

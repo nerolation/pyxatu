@@ -3,7 +3,7 @@
 import pytest
 from datetime import datetime, timezone
 
-from pyxatu.clickhouse_client import ClickHouseQueryBuilder
+from pyxatu.core.clickhouse_client import ClickHouseQueryBuilder
 from pyxatu.utils import slot_to_timestamp
 
 

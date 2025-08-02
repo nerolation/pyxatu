@@ -74,7 +74,7 @@ class SchemaManager:
                     data = json.load(f)
             else:
                 # Load bundled schema
-                schema_file = resources.files('pyxatu') / 'xatu_tables_schema.json'
+                schema_file = resources.files('pyxatu.data') / 'xatu_tables_schema.json'
                 data = json.loads(schema_file.read_text())
             
             # Parse tables

@@ -142,9 +142,9 @@ class TestSlotQueryParams:
             SlotQueryParams(slot=[1000, 1000])
         assert "start must be less than end" in str(exc_info.value)
         
-        # Invalid type
+        # Invalid slot value (negative)
         with pytest.raises(ValidationError):
-            SlotQueryParams(slot="1000")
+            SlotQueryParams(slot=-1000)
 
 
 class TestBlock:

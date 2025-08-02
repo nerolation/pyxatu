@@ -1,12 +1,8 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -20,115 +16,72 @@ parts/
 sdist/
 var/
 wheels/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-.coveragerc
-
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-doc/build/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# pyenv
-.python-version
-
-# celery beat schedule file
-celerybeat-schedule
-celerybeat-schedule.*
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.venv
-env/
+# Virtual environments
 venv/
 ENV/
-env.bak/
-venv.bak/
+env/
+.venv
 
-# Spyder project settings
-.spyderproject
-.spyproject
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
 .mypy_cache/
 .dmypy.json
 dmypy.json
 
-# Pyre type checker
-.pyre/
+# Local configuration
+config.json
+*.local.json
+.env
+.env.local
 
-# VS Code
-.vscode/
+# Analysis and temporary files
+analyze_*.py
+check_*.py
+find_*.py
+verify_*.py
+refresh_*.py
+reorg_*.py
+*_reorg_*.py
+simple_*.py
+entity_*.py
+final_*.py
+clarify_*.py
+quick_*.py
+cli_sync_patch.py
+*.csv
+*.sql
+REORG_*.md
+FINAL_*.md
+README_LLM.md
 
-# Idea
-.idea/
+# Cache
+.pyxatu/
 
-# virtual environments
-venv/
-bin/
-lib/
-lib64/
-pyvenv.cfg
-share/
-
-# Project specific ignores
-*.ipynb
-*.sh
+# OS
 .DS_Store
 Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
 *.tmp
 *.bak
-*.orig
-*.rej
+*.swp
+*~
+EOF < /dev/null

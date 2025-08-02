@@ -5,9 +5,9 @@ from typing import List, Optional, Set, Dict, Any
 from datetime import datetime, timedelta
 import pandas as pd
 
-from pyxatu.base import BaseDataFetcher, BaseConnector
+from pyxatu.core.base import BaseDataFetcher, BaseConnector
 from pyxatu.models import Transaction, SlotQueryParams
-from pyxatu.clickhouse_client import ClickHouseQueryBuilder
+from pyxatu.core.clickhouse_client import ClickHouseQueryBuilder
 from pyxatu.utils import slot_to_timestamp
 
 

@@ -35,16 +35,12 @@ __doc__ = """
 PyXatu - Query Ethereum blockchain data from Xatu
 
 Quick Start:
-    import asyncio
     from pyxatu import PyXatu
     
-    async def main():
-        async with PyXatu() as xatu:
-            # Get recent blocks
-            blocks = await xatu.get_slots(slot=[9000000, 9000010])
-            print(blocks)
-    
-    asyncio.run(main())
+    with PyXatu() as xatu:
+        # Get recent blocks
+        blocks = xatu.get_slots(slot=[9000000, 9000010])
+        print(blocks)
 
 Environment Variables:
     - CLICKHOUSE_URL or PYXATU_CLICKHOUSE_URL

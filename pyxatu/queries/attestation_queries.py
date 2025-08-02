@@ -6,12 +6,12 @@ from typing import List, Optional, Set, Dict, Any
 import pandas as pd
 from tqdm.auto import tqdm
 
-from pyxatu.base import BaseDataFetcher
+from pyxatu.core.base import BaseDataFetcher
 from pyxatu.models import (
     Attestation, ElaboratedAttestation, SlotQueryParams, 
     VoteType, AttestationStatus
 )
-from pyxatu.clickhouse_client import ClickHouseQueryBuilder
+from pyxatu.core.clickhouse_client import ClickHouseQueryBuilder
 from pyxatu.queries.slot_queries import SlotDataFetcher
 
 

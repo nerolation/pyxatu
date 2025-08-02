@@ -13,7 +13,7 @@ import pandas as pd
 import requests
 import re
 
-from .clickhouse_client import ClickHouseClient
+from .core.clickhouse_client import ClickHouseClient
 from .config import ConfigManager
 
 
@@ -343,17 +343,17 @@ class ValidatorLabelManager:
         # Query deposits from the proper table
         query = """
         SELECT DISTINCT
-            d.evt_pubkey as pubkey,
+            d.pubkey as pubkey,
             t.from_address as from_address,
-            d.evt_amount as amount,
-            d.evt_block_number as block_number,
-            d.evt_tx_hash as tx_hash
-        FROM canonical_beacon_validators_deposits d
+            d.amount as amount,
+            d.block_number as block_number,
+            t.hash as tx_hash
+        FROM canonical_beacon_block_deposit d
         INNER JOIN canonical_execution_transaction t
-            ON d.evt_tx_hash = t.hash
-            AND d.evt_block_number = t.block_number
+            ON d.block_number = t.block_number
         WHERE d.meta_network_name = 'mainnet'
-        ORDER BY d.evt_block_number, d.evt_index
+          AND t.meta_network_name = 'mainnet'
+        ORDER BY d.block_number, d.index
         """
         
         deposits_df = await self.client.execute_query_df(query)
@@ -494,12 +494,11 @@ class ValidatorLabelManager:
             "0x1e68238ce926dec62b3fbc99ab06eb1d85ce0270"
         }
         kiln_query = f"""
-        SELECT DISTINCT d.evt_pubkey as pubkey
-        FROM canonical_beacon_validators_deposits d
+        SELECT DISTINCT d.pubkey as pubkey
+        FROM canonical_beacon_block_deposit d
         INNER JOIN canonical_execution_traces dep 
             ON dep.to_address = '{self.BEACON_DEPOSIT_CONTRACT}'
-            AND dep.transaction_hash = d.evt_tx_hash
-            AND dep.block_number = d.evt_block_number
+            AND dep.block_number = d.block_number
             AND dep.from_address IN ('{"','".join(kiln_contracts)}')
             AND dep.action_value > 0
             AND dep.error IS NULL
@@ -529,22 +528,24 @@ class ValidatorLabelManager:
         query = f"""
         WITH batch_deposits AS (
             SELECT DISTINCT
-                d.evt_block_number as block_number,
-                d.evt_tx_hash as transaction_hash,
-                d.evt_pubkey as pubkey,
+                d.block_number as block_number,
+                t.hash as transaction_hash,
+                d.pubkey as pubkey,
                 traces.from_address as funds_origin,
                 txs.from_address as tx_from
-            FROM canonical_beacon_validators_deposits d
+            FROM canonical_beacon_block_deposit d
+            INNER JOIN canonical_execution_transaction t
+                ON t.block_number = d.block_number
             INNER JOIN canonical_execution_traces dep 
                 ON dep.to_address = '{self.BEACON_DEPOSIT_CONTRACT}'
-                AND dep.transaction_hash = d.evt_tx_hash
-                AND dep.block_number = d.evt_block_number
+                AND dep.transaction_hash = t.hash
+                AND dep.block_number = d.block_number
                 AND dep.from_address IN ('{batch_contracts_str}')
                 AND dep.action_value > 0
                 AND dep.error IS NULL
             INNER JOIN canonical_execution_traces traces 
-                ON traces.block_number = d.evt_block_number
-                AND traces.transaction_hash = d.evt_tx_hash
+                ON traces.block_number = d.block_number
+                AND traces.transaction_hash = t.hash
                 AND traces.to_address = dep.from_address
                 AND traces.action_value > 0
                 AND traces.error IS NULL
