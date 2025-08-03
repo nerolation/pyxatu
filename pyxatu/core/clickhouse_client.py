@@ -1,14 +1,14 @@
 """ClickHouse client for PyXatu."""
 
-import asyncio
 import logging
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
 import pandas as pd
 from io import StringIO
+import json
 
-import aiohttp
-from aiohttp import BasicAuth, ClientTimeout
+import requests
+from requests.auth import HTTPBasicAuth
 import backoff
 
 from pyxatu.core.base import BaseClient
@@ -243,130 +243,97 @@ class ClickHouseQueryBuilder:
 
 
 class ClickHouseClient(BaseClient):
-    """Async ClickHouse client."""
+    """Synchronous ClickHouse client."""
     
     def __init__(self, config: ClickhouseConfig):
         self.config = config
         self.logger = logging.getLogger(__name__)
-        self._session: Optional[aiohttp.ClientSession] = None
-        self._auth = BasicAuth(config.user, config.password.get_secret_value())
-        self._timeout = ClientTimeout(total=config.timeout)
-        
-    def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create aiohttp session with connection pooling."""
-        if self._session is None or self._session.closed:
-            connector = aiohttp.TCPConnector(
-                limit=self.config.pool_size,
-                limit_per_host=self.config.pool_size
-            )
-            self._session = aiohttp.ClientSession(
-                connector=connector,
-                auth=self._auth,
-                timeout=self._timeout
-            )
-        return self._session
+        self._auth = HTTPBasicAuth(config.user, config.password.get_secret_value())
+        self._session = requests.Session()
+        self._session.auth = self._auth
         
     @backoff.on_exception(
         backoff.expo,
-        (aiohttp.ClientError, asyncio.TimeoutError),
+        (requests.RequestException, requests.Timeout),
         max_tries=3,
         max_time=60
     )
-    async def execute_query(
+    def execute_query(
         self, 
         query: str, 
         params: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """Execute a query and return results as list of dicts."""
-        # Create a new session for each request to avoid event loop issues
-        connector = aiohttp.TCPConnector(force_close=True)
-        timeout = ClientTimeout(total=self.config.timeout)
+        # Format query with parameters if provided
+        if params:
+            formatted_query = query % params
+        else:
+            formatted_query = query
+            
+        self.logger.debug(f"Executing query: {formatted_query[:200]}...")
         
-        async with aiohttp.ClientSession(
-            connector=connector,
-            auth=self._auth,
-            timeout=timeout
-        ) as session:
-            # Format query with parameters if provided
-            if params:
-                formatted_query = query % params
-            else:
-                formatted_query = query
-                
-            self.logger.debug(f"Executing query: {formatted_query[:200]}...")
+        response = self._session.get(
+            f"{self.config.url}/",
+            params={
+                'query': formatted_query,
+                'database': self.config.database,
+                'default_format': 'JSONEachRow'
+            },
+            timeout=self.config.timeout
+        )
+        response.raise_for_status()
+        text = response.text
+        
+        if not text.strip():
+            return []
             
-            async with session.get(
-                f"{self.config.url}/",
-                params={
-                    'query': formatted_query,
-                    'database': self.config.database,
-                    'default_format': 'JSONEachRow'
-                }
-            ) as response:
-                response.raise_for_status()
-                text = await response.text()
+        # Parse JSON lines
+        results = []
+        for line in text.strip().split('\n'):
+            if line:
+                results.append(json.loads(line))
                 
-                if not text.strip():
-                    return []
-                    
-                # Parse JSON lines
-                results = []
-                for line in text.strip().split('\n'):
-                    if line:
-                        import json
-                        results.append(json.loads(line))
-                        
-                return results
+        return results
             
-    async def execute_query_df(
+    def execute_query_df(
         self, 
         query: str, 
         params: Optional[Dict[str, Any]] = None
     ) -> pd.DataFrame:
         """Execute a query and return results as pandas DataFrame."""
-        # Create a new session for each request to avoid event loop issues
-        connector = aiohttp.TCPConnector(force_close=True)
-        timeout = ClientTimeout(total=self.config.timeout)
+        # Format query with parameters if provided
+        if params:
+            formatted_query = query % params
+        else:
+            formatted_query = query
+            
+        self.logger.debug(f"Executing query for DataFrame: {formatted_query[:200]}...")
         
-        async with aiohttp.ClientSession(
-            connector=connector,
-            auth=self._auth,
-            timeout=timeout
-        ) as session:
-            # Format query with parameters if provided
-            if params:
-                formatted_query = query % params
-            else:
-                formatted_query = query
-                
-            self.logger.debug(f"Executing query for DataFrame: {formatted_query[:200]}...")
+        response = self._session.get(
+            f"{self.config.url}/",
+            params={
+                'query': formatted_query,
+                'database': self.config.database,
+                'default_format': 'TSVWithNames'
+            },
+            timeout=self.config.timeout
+        )
+        response.raise_for_status()
+        text = response.text
+        
+        if not text.strip():
+            return pd.DataFrame()
             
-            async with session.get(
-                f"{self.config.url}/",
-                params={
-                    'query': formatted_query,
-                    'database': self.config.database,
-                    'default_format': 'TSVWithNames'
-                }
-            ) as response:
-                response.raise_for_status()
-                text = await response.text()
-                
-                if not text.strip():
-                    return pd.DataFrame()
-                    
-                # Parse TSV into DataFrame
-                return pd.read_csv(StringIO(text), sep='\t')
+        # Parse TSV into DataFrame
+        return pd.read_csv(StringIO(text), sep='\t')
             
-    async def execute_query_stream(
+    def execute_query_stream(
         self,
         query: str,
         params: Optional[Dict[str, Any]] = None,
         chunk_size: int = 1000
     ):
         """Execute a query and yield results in chunks."""
-        session = self._get_session()
-        
         if params:
             formatted_query = query % params
         else:
@@ -374,39 +341,40 @@ class ClickHouseClient(BaseClient):
             
         self.logger.debug(f"Executing streaming query: {formatted_query[:200]}...")
         
-        async with session.get(
+        response = self._session.get(
             f"{self.config.url}/",
             params={
                 'query': formatted_query,
                 'database': self.config.database,
                 'default_format': 'JSONEachRow'
-            }
-        ) as response:
-            response.raise_for_status()
-            
-            buffer = []
-            async for line in response.content:
-                if line.strip():
-                    import json
-                    buffer.append(json.loads(line))
-                    
-                    if len(buffer) >= chunk_size:
-                        yield buffer
-                        buffer = []
-                        
-            if buffer:
-                yield buffer
+            },
+            stream=True,
+            timeout=self.config.timeout
+        )
+        response.raise_for_status()
+        
+        buffer = []
+        for line in response.iter_lines(decode_unicode=True):
+            if line.strip():
+                buffer.append(json.loads(line))
                 
-    async def test_connection(self) -> bool:
+                if len(buffer) >= chunk_size:
+                    yield buffer
+                    buffer = []
+                    
+        if buffer:
+            yield buffer
+                
+    def test_connection(self) -> bool:
         """Test the database connection."""
         try:
-            result = await self.execute_query("SELECT 1 as test")
+            result = self.execute_query("SELECT 1 as test")
             return result[0]['test'] == 1
         except Exception as e:
             self.logger.error(f"Connection test failed: {e}")
             return False
             
-    async def get_table_columns(self, table: str) -> List[str]:
+    def get_table_columns(self, table: str) -> List[str]:
         """Get column names for a table."""
         query = """
         SELECT name
@@ -416,15 +384,15 @@ class ClickHouseClient(BaseClient):
         ORDER BY position
         """
         
-        results = await self.execute_query(
+        results = self.execute_query(
             query,
             {'table': table, 'database': self.config.database}
         )
         
         return [row['name'] for row in results]
         
-    async def close(self) -> None:
+    def close(self) -> None:
         """Close the client connection."""
-        if self._session and not self._session.closed:
-            await self._session.close()
+        if self._session:
+            self._session.close()
         self._session = None

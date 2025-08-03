@@ -77,9 +77,8 @@ class PyXatu:
         # Don't auto-connect in __init__ to avoid event loop issues
         # Connection will happen on first use or explicit connect()
         
-    @run_async
-    async def _connect(self) -> None:
-        """Connect to ClickHouse."""
+    async def _connect_async(self) -> None:
+        """Connect to ClickHouse (async)."""
         if self._client is None:
             self._client = ClickHouseClient(self.config.clickhouse)
             
@@ -93,6 +92,11 @@ class PyXatu:
             )
             self._transaction_fetcher = TransactionDataFetcher(self._client)
             self._validator_fetcher = ValidatorDataFetcher(self._client)
+    
+    @run_async  
+    async def _connect(self) -> None:
+        """Connect to ClickHouse (wrapped for sync usage)."""
+        await self._connect_async()
             
     @run_async
     async def _close(self) -> None:
@@ -124,6 +128,17 @@ class PyXatu:
         if self._client is None:
             # Try to connect if not already connected
             self.connect()
+            # If still not connected after attempt, raise error
+            if self._client is None:
+                raise RuntimeError(
+                    "Not connected to ClickHouse. Connection failed."
+                )
+    
+    async def _ensure_connected_async(self) -> None:
+        """Ensure client is connected (async version)."""
+        if self._client is None:
+            # Try to connect if not already connected
+            await self._connect_async()
             # If still not connected after attempt, raise error
             if self._client is None:
                 raise RuntimeError(
@@ -185,7 +200,7 @@ class PyXatu:
         Returns:
             DataFrame with slot data, sorted and reindexed
         """
-        self._ensure_connected()
+        await self._ensure_connected_async()
         
         # Handle columns parameter
         if columns is None:
@@ -217,7 +232,7 @@ class PyXatu:
         network: Union[str, Network] = Network.MAINNET
     ) -> List[int]:
         """Get missed slots in a range."""
-        self._ensure_connected()
+        await self._ensure_connected_async()
         
         network_str = network.value if isinstance(network, Network) else network
         missed = await self._slot_fetcher.fetch_missed_slots(slot_range, network_str)
@@ -235,7 +250,7 @@ class PyXatu:
         Returns:
             DataFrame with reorg data, sorted and reindexed
         """
-        self._ensure_connected()
+        await self._ensure_connected_async()
         
         params = SlotQueryParams(
             slot=slot,
@@ -269,7 +284,7 @@ class PyXatu:
         Returns:
             DataFrame with attestation data, sorted and reindexed
         """
-        self._ensure_connected()
+        await self._ensure_connected_async()
         
         # Handle columns parameter
         if columns is None:
@@ -304,7 +319,7 @@ class PyXatu:
         Returns:
             DataFrame with elaborated attestation data, sorted and reindexed
         """
-        self._ensure_connected()
+        await self._ensure_connected_async()
         
         # Convert slot to range
         if isinstance(slot, int):
@@ -358,7 +373,7 @@ class PyXatu:
         Returns:
             DataFrame with transaction data, sorted and reindexed
         """
-        self._ensure_connected()
+        await self._ensure_connected_async()
         
         # Handle columns parameter
         if columns is None:
@@ -400,7 +415,7 @@ class PyXatu:
         Returns:
             DataFrame with withdrawal data, sorted and reindexed
         """
-        self._ensure_connected()
+        await self._ensure_connected_async()
         
         # Handle columns parameter
         if columns is None:
@@ -442,7 +457,7 @@ class PyXatu:
         Returns:
             DataFrame with validator data, sorted and reindexed
         """
-        self._ensure_connected()
+        await self._ensure_connected_async()
         
         # Handle columns parameter
         if columns is None:
@@ -465,7 +480,14 @@ class PyXatu:
     async def _get_label_manager(self) -> ValidatorLabelManager:
         """Get or create label manager."""
         if self._label_manager is None:
-            self._label_manager = ValidatorLabelManager()
+            self.logger.info("Initializing validator label manager...")
+            # Ensure we're connected first - need to await the async connection
+            if self._client is None:
+                await self._connect_async()
+            # Use the original validator label manager
+            self._label_manager = ValidatorLabelManager(client=self._client)
+            await self._label_manager.initialize()
+            self.logger.info("Validator label manager initialized")
         return self._label_manager
         
     @run_async
@@ -484,7 +506,15 @@ class PyXatu:
         if refresh:
             await manager.refresh_labels()
             
-        df = manager.get_labels(indices)
+        # Get labels for the specified indices
+        labels_dict = manager.get_validator_labels_bulk(indices)
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(list(labels_dict.items()), columns=['validator_index', 'entity'])
+        
+        # Add any missing indices with None
+        df = df.set_index('validator_index').reindex(indices).reset_index()
+        
         return self._sort_and_reindex_df(df)
         
     @run_async
@@ -499,7 +529,9 @@ class PyXatu:
     def get_label_manager(self) -> ValidatorLabelManager:
         """Get the validator label manager instance."""
         if self._label_manager is None:
-            self._label_manager = ValidatorLabelManager()
+            # Note: This returns a non-initialized manager for backwards compatibility
+            # For full functionality, use the async methods that call _get_label_manager()
+            self._label_manager = ValidatorLabelManager(client=self._client)
         return self._label_manager
         
     @run_async
@@ -523,7 +555,7 @@ class PyXatu:
     async def refresh_validator_labels(self) -> None:
         """Refresh the validator labels cache."""
         manager = await self._get_label_manager()
-        await manager.refresh_labels()
+        await manager.refresh()
         
     # Custom queries
     
@@ -542,7 +574,7 @@ class PyXatu:
         Returns:
             DataFrame with query results, sorted and reindexed
         """
-        self._ensure_connected()
+        await self._ensure_connected_async()
         self.logger.warning("Executing raw SQL query - ensure it's properly sanitized")
         df = await self._client.execute_query_df(query, params)
         return self._sort_and_reindex_df(df)
