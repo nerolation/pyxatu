@@ -1,7 +1,7 @@
 """Integration tests for PyXatu library - simplified."""
 
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import Mock, patch
 import pandas as pd
 from datetime import datetime
 
@@ -15,16 +15,10 @@ class TestPyXatuIntegration:
     def test_complete_slot_analysis_workflow(self):
         """Test complete workflow for analyzing slots."""
         # Mock the client and responses
-        with patch('pyxatu.pyxatu.ClickHouseClient') as mock_client_class:
+        with patch('pyxatu.core.clickhouse_client.ClickHouseClient') as mock_client_class:
             mock_client = Mock()
-            # test_connection is async, so we need to mock it properly
-            async def mock_test_connection():
-                return True
-            mock_client.test_connection = mock_test_connection
-            # close is also async
-            async def mock_close():
-                pass
-            mock_client.close = mock_close
+            mock_client.test_connection.return_value = True
+            mock_client.close = Mock()
             mock_client_class.return_value = mock_client
             
             # Mock slot data
@@ -35,10 +29,7 @@ class TestPyXatuIntegration:
                 'graffiti': ['test1', 'test2', 'test3']
             })
             
-            # execute_query_df is async, so we need to mock it properly
-            async def mock_execute_query_df(*args, **kwargs):
-                return slot_df
-            mock_client.execute_query_df = mock_execute_query_df
+            mock_client.execute_query_df.return_value = slot_df
             
             with PyXatu() as xatu:
                 # Get slots
@@ -52,16 +43,10 @@ class TestPyXatuIntegration:
                 
     def test_validator_performance_analysis(self):
         """Test analyzing validator performance with labels."""
-        with patch('pyxatu.pyxatu.ClickHouseClient') as mock_client_class:
+        with patch('pyxatu.core.clickhouse_client.ClickHouseClient') as mock_client_class:
             mock_client = Mock()
-            # test_connection is async, so we need to mock it properly
-            async def mock_test_connection():
-                return True
-            mock_client.test_connection = mock_test_connection
-            # close is also async
-            async def mock_close():
-                pass
-            mock_client.close = mock_close
+            mock_client.test_connection.return_value = True
+            mock_client.close = Mock()
             mock_client_class.return_value = mock_client
             
             # Mock attestation data
@@ -74,10 +59,7 @@ class TestPyXatuIntegration:
                 'inclusion_slot': [8000001, 8000001, 8000002, 8000003, 8000001]
             })
             
-            # execute_query_df is async, so we need to mock it properly
-            async def mock_execute_query_df(*args, **kwargs):
-                return attestation_df
-            mock_client.execute_query_df = mock_execute_query_df
+            mock_client.execute_query_df.return_value = attestation_df
             
             with PyXatu() as xatu:
                 # Get attestations
@@ -89,16 +71,10 @@ class TestPyXatuIntegration:
                     
     def test_transaction_privacy_analysis(self):
         """Test analyzing transaction privacy across slots."""
-        with patch('pyxatu.pyxatu.ClickHouseClient') as mock_client_class:
+        with patch('pyxatu.core.clickhouse_client.ClickHouseClient') as mock_client_class:
             mock_client = Mock()
-            # test_connection is async, so we need to mock it properly
-            async def mock_test_connection():
-                return True
-            mock_client.test_connection = mock_test_connection
-            # close is also async
-            async def mock_close():
-                pass
-            mock_client.close = mock_close
+            mock_client.test_connection.return_value = True
+            mock_client.close = Mock()
             mock_client_class.return_value = mock_client
             
             # Mock transaction data
@@ -110,10 +86,7 @@ class TestPyXatuIntegration:
                 'value': [1e18, 2e18, 3e18, 4e18]
             })
             
-            # execute_query_df is async, so we need to mock it properly
-            async def mock_execute_query_df(*args, **kwargs):
-                return tx_df
-            mock_client.execute_query_df = mock_execute_query_df
+            mock_client.execute_query_df.return_value = tx_df
             
             with PyXatu() as xatu:
                 # Get transactions
@@ -127,22 +100,16 @@ class TestPyXatuIntegration:
                 
     def test_validator_exit_tracking(self):
         """Test tracking validator exits."""
-        with patch('pyxatu.pyxatu.ClickHouseClient') as mock_client_class:
+        with patch('pyxatu.core.clickhouse_client.ClickHouseClient') as mock_client_class:
             mock_client = Mock()
-            # test_connection is async, so we need to mock it properly
-            async def mock_test_connection():
-                return True
-            mock_client.test_connection = mock_test_connection
-            # close is also async
-            async def mock_close():
-                pass
-            mock_client.close = mock_close
+            mock_client.test_connection.return_value = True
+            mock_client.close = Mock()
             mock_client_class.return_value = mock_client
             
             with PyXatu() as xatu:
                 # Mock label manager
                 with patch.object(xatu, 'get_label_manager') as mock_get_manager:
-                    mock_manager = Mock()  # Use Mock instead of AsyncMock for non-async methods
+                    mock_manager = Mock()
                     mock_manager.get_exit_statistics.return_value = {
                         'total_validators': 5,
                         'active_validators': 2,
@@ -175,27 +142,21 @@ class TestPyXatuIntegration:
                     
     def test_error_recovery_workflow(self):
         """Test error handling and recovery in workflows."""
-        with patch('pyxatu.pyxatu.ClickHouseClient') as mock_client_class:
+        with patch('pyxatu.core.clickhouse_client.ClickHouseClient') as mock_client_class:
             mock_client = Mock()
-            # test_connection is async, so we need to mock it properly
-            async def mock_test_connection():
-                return True
-            mock_client.test_connection = mock_test_connection
-            # close is also async
-            async def mock_close():
-                pass
-            mock_client.close = mock_close
+            mock_client.test_connection.return_value = True
+            mock_client.close = Mock()
             mock_client_class.return_value = mock_client
             
             # First query fails, second succeeds
             call_count = 0
-            async def mock_execute_query_df_with_error(*args, **kwargs):
+            def mock_execute_query_df_with_error(*args, **kwargs):
                 nonlocal call_count
                 call_count += 1
                 if call_count == 1:
                     raise Exception("Database timeout")
                 return pd.DataFrame({'slot': [8000000]})
-            mock_client.execute_query_df = mock_execute_query_df_with_error
+            mock_client.execute_query_df.side_effect = mock_execute_query_df_with_error
             
             with PyXatu() as xatu:
                 # Should handle the error gracefully
@@ -203,25 +164,18 @@ class TestPyXatuIntegration:
                     slots = xatu.get_slots(slot=8000000)
                 except Exception:
                     # Retry logic or error handling
-                    async def mock_execute_query_df_retry(*args, **kwargs):
-                        return pd.DataFrame({'slot': [8000000]})
-                    mock_client.execute_query_df = mock_execute_query_df_retry
+                    mock_client.execute_query_df.side_effect = None
+                    mock_client.execute_query_df.return_value = pd.DataFrame({'slot': [8000000]})
                     slots = xatu.get_slots(slot=8000000)
                     
                 assert len(slots) == 1
                 
     def test_multiple_queries(self):
         """Test running multiple queries in sequence."""
-        with patch('pyxatu.pyxatu.ClickHouseClient') as mock_client_class:
+        with patch('pyxatu.core.clickhouse_client.ClickHouseClient') as mock_client_class:
             mock_client = Mock()
-            # test_connection is async, so we need to mock it properly
-            async def mock_test_connection():
-                return True
-            mock_client.test_connection = mock_test_connection
-            # close is also async
-            async def mock_close():
-                pass
-            mock_client.close = mock_close
+            mock_client.test_connection.return_value = True
+            mock_client.close = Mock()
             mock_client_class.return_value = mock_client
             
             # Mock different query results
@@ -232,12 +186,12 @@ class TestPyXatuIntegration:
             # Return different results for different queries
             query_results = [slot_df, attestation_df, tx_df]
             query_index = 0
-            async def mock_execute_query_df_multiple(*args, **kwargs):
+            def mock_execute_query_df_multiple(*args, **kwargs):
                 nonlocal query_index
                 result = query_results[query_index]
                 query_index += 1
                 return result
-            mock_client.execute_query_df = mock_execute_query_df_multiple
+            mock_client.execute_query_df.side_effect = mock_execute_query_df_multiple
             
             with PyXatu() as xatu:
                 # Run queries in sequence (synchronous API)

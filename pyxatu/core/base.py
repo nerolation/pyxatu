@@ -15,17 +15,17 @@ class BaseClient(ABC):
     """Abstract base class for database clients."""
     
     @abstractmethod
-    async def execute_query(self, query: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def execute_query(self, query: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Execute a query and return results."""
         pass
     
     @abstractmethod
-    async def execute_query_df(self, query: str, params: Optional[Dict[str, Any]] = None) -> Any:
+    def execute_query_df(self, query: str, params: Optional[Dict[str, Any]] = None) -> Any:
         """Execute a query and return results as DataFrame."""
         pass
     
     @abstractmethod
-    async def close(self) -> None:
+    def close(self) -> None:
         """Close the client connection."""
         pass
 
@@ -38,7 +38,7 @@ class BaseDataFetcher(ABC, Generic[T]):
         self.logger = logging.getLogger(self.__class__.__name__)
     
     @abstractmethod
-    async def fetch(self, params: QueryParams) -> List[T]:
+    def fetch(self, params: QueryParams) -> List[T]:
         """Fetch data based on query parameters."""
         pass
     
@@ -52,17 +52,17 @@ class BaseConnector(ABC):
     """Abstract base class for external data connectors."""
     
     @abstractmethod
-    async def connect(self) -> None:
+    def connect(self) -> None:
         """Establish connection to external service."""
         pass
     
     @abstractmethod
-    async def disconnect(self) -> None:
+    def disconnect(self) -> None:
         """Close connection to external service."""
         pass
     
     @abstractmethod
-    async def fetch_data(self, **kwargs) -> Any:
+    def fetch_data(self, **kwargs) -> Any:
         """Fetch data from external service."""
         pass
 
@@ -71,22 +71,22 @@ class CacheManager(ABC):
     """Abstract base class for cache management."""
     
     @abstractmethod
-    async def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Optional[Any]:
         """Retrieve value from cache."""
         pass
     
     @abstractmethod
-    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
+    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
         """Store value in cache with optional TTL."""
         pass
     
     @abstractmethod
-    async def delete(self, key: str) -> None:
+    def delete(self, key: str) -> None:
         """Remove value from cache."""
         pass
     
     @abstractmethod
-    async def clear(self) -> None:
+    def clear(self) -> None:
         """Clear all cached values."""
         pass
 
@@ -162,7 +162,7 @@ class DataProcessor(ABC, Generic[T]):
     """Abstract base class for data processing pipelines."""
     
     @abstractmethod
-    async def process(self, data: List[T]) -> List[T]:
+    def process(self, data: List[T]) -> List[T]:
         """Process data through the pipeline."""
         pass
     
@@ -176,7 +176,7 @@ class ProcessingStep(ABC, Generic[T]):
     """Abstract base class for individual processing steps."""
     
     @abstractmethod
-    async def execute(self, data: T) -> T:
+    def execute(self, data: T) -> T:
         """Execute the processing step on data."""
         pass
 

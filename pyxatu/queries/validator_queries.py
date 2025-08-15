@@ -16,11 +16,11 @@ class ValidatorDataFetcher(BaseDataFetcher[ValidatorDuty]):
         """Return the primary table name."""
         return 'canonical_beacon_proposer_duty'
         
-    async def fetch(self, params: SlotQueryParams) -> pd.DataFrame:
+    def fetch(self, params: SlotQueryParams) -> pd.DataFrame:
         """Implementation of abstract fetch method."""
-        return await self.fetch_proposer_duties(params)
+        return self.fetch_proposer_duties(params)
         
-    async def fetch_proposer_duties(self, params: SlotQueryParams) -> pd.DataFrame:
+    def fetch_proposer_duties(self, params: SlotQueryParams) -> pd.DataFrame:
         """Fetch proposer duty assignments."""
         builder = ClickHouseQueryBuilder()
         builder.select(params.columns).from_table(self.get_table_name())
@@ -50,9 +50,9 @@ class ValidatorDataFetcher(BaseDataFetcher[ValidatorDuty]):
             builder.limit(params.limit)
             
         query, query_params = builder.build()
-        return await self.client.execute_query_df(query, query_params)
+        return self.client.execute_query_df(query, query_params)
         
-    async def fetch_block_events(self, params: SlotQueryParams) -> pd.DataFrame:
+    def fetch_block_events(self, params: SlotQueryParams) -> pd.DataFrame:
         """Fetch block event data."""
         builder = ClickHouseQueryBuilder()
         builder.select(params.columns)
@@ -83,9 +83,9 @@ class ValidatorDataFetcher(BaseDataFetcher[ValidatorDuty]):
             builder.limit(params.limit)
             
         query, query_params = builder.build()
-        return await self.client.execute_query_df(query, query_params)
+        return self.client.execute_query_df(query, query_params)
         
-    async def fetch_beacon_blocks_v2(self, params: SlotQueryParams) -> pd.DataFrame:
+    def fetch_beacon_blocks_v2(self, params: SlotQueryParams) -> pd.DataFrame:
         """Fetch beacon block data from v2 endpoint."""
         builder = ClickHouseQueryBuilder()
         builder.select(params.columns)
@@ -116,9 +116,9 @@ class ValidatorDataFetcher(BaseDataFetcher[ValidatorDuty]):
             builder.limit(params.limit)
             
         query, query_params = builder.build()
-        return await self.client.execute_query_df(query, query_params)
+        return self.client.execute_query_df(query, query_params)
         
-    async def enrich_missed_slots_with_proposers(
+    def enrich_missed_slots_with_proposers(
         self,
         slots_df: pd.DataFrame,
         network: str = 'mainnet'
@@ -142,7 +142,7 @@ class ValidatorDataFetcher(BaseDataFetcher[ValidatorDuty]):
             columns='slot,proposer_validator_index',
             network=network
         )
-        proposer_duties = await self.fetch_proposer_duties(params)
+        proposer_duties = self.fetch_proposer_duties(params)
         
         if proposer_duties.empty:
             return slots_df
@@ -163,7 +163,7 @@ class ValidatorDataFetcher(BaseDataFetcher[ValidatorDuty]):
         
         return slots_df
         
-    async def fetch_validators(
+    def fetch_validators(
         self,
         validator_indices: Optional[Union[int, List[int]]] = None,
         columns: str = "*",
@@ -200,4 +200,4 @@ class ValidatorDataFetcher(BaseDataFetcher[ValidatorDuty]):
             builder.limit(limit)
             
         query, query_params = builder.build()
-        return await self.client.execute_query_df(query, query_params)
+        return self.client.execute_query_df(query, query_params)

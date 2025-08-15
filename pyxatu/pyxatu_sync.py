@@ -252,32 +252,36 @@ class PyXatu:
         slot_range: Optional[List[int]] = None,
         network: Union[str, Network] = Network.MAINNET,
         limit: Optional[int] = None
-    ) -> pd.DataFrame:
+    ) -> List[int]:
         """Get missed slots in a range."""
         self._ensure_connected()
         
         network_str = network.value if isinstance(network, Network) else network
         
-        # Query missed slots
-        where_parts = [
-            f"meta_network_name = '{network_str}'",
-            "proposer_index = -1"  # Missed slots have proposer_index = -1
-        ]
+        if not slot_range:
+            raise ValueError("slot_range is required for get_missed_slots")
         
-        if slot_range:
-            where_parts.append(f"slot >= {slot_range[0]} AND slot < {slot_range[1]}")
-        
-        limit_clause = f" LIMIT {limit}" if limit else " LIMIT 100"
-        
+        # Get existing slots in the range
         query = f"""
-        SELECT slot, slot_start_date_time
-        FROM beacon_api_slot
-        WHERE {' AND '.join(where_parts)}
-        ORDER BY slot DESC
-        {limit_clause}
+        SELECT DISTINCT slot
+        FROM canonical_beacon_block
+        WHERE meta_network_name = '{network_str}'
+        AND slot >= {slot_range[0]} AND slot < {slot_range[1]}
+        ORDER BY slot
         """
         
-        return self._client.execute_query_df(query)
+        df = self._client.execute_query_df(query)
+        
+        if df.empty:
+            # All slots in range are missed
+            return list(range(slot_range[0], slot_range[1]))
+        
+        # Find gaps in the sequence
+        existing_slots = set(df['slot'].tolist())
+        all_slots = set(range(slot_range[0], slot_range[1]))
+        missed_slots = sorted(all_slots - existing_slots)
+        
+        return missed_slots[:limit] if limit else missed_slots
     
     def get_reorgs(
         self,
@@ -285,29 +289,74 @@ class PyXatu:
         network: Union[str, Network] = Network.MAINNET,
         limit: Optional[int] = None
     ) -> pd.DataFrame:
-        """Get chain reorganization events."""
+        """Get chain reorganization events (slots that were reorged AND are empty)."""
         self._ensure_connected()
         
         network_str = network.value if isinstance(network, Network) else network
         
+        # First get reorg events
         where_parts = [f"meta_network_name = '{network_str}'"]
         
+        # Apply slot filter for reorged slots
         if isinstance(slot, int):
-            where_parts.append(f"slot = {slot}")
+            where_parts.append(f"(slot - depth) = {slot}")
         elif isinstance(slot, list):
-            where_parts.append(f"slot >= {slot[0]} AND slot < {slot[1]}")
+            where_parts.append(f"(slot - depth) >= {slot[0]} AND (slot - depth) < {slot[1]}")
         
-        limit_clause = f" LIMIT {limit}" if limit else " LIMIT 100"
+        limit_clause = f" LIMIT {limit}" if limit else ""
         
+        # Get reorg events
         query = f"""
-        SELECT *
+        SELECT slot, depth, slot - depth as reorged_slot, old_head_block, new_head_block
         FROM beacon_api_eth_v1_events_chain_reorg
         WHERE {' AND '.join(where_parts)}
         ORDER BY slot DESC
         {limit_clause}
         """
         
-        return self._client.execute_query_df(query)
+        reorg_events = self._client.execute_query_df(query)
+        
+        if reorg_events.empty:
+            return pd.DataFrame(columns=['slot', 'depth', 'old_head_block', 'new_head_block'])
+        
+        # Get unique reorged slots
+        reorged_slots = reorg_events['reorged_slot'].unique().tolist()
+        
+        # If no reorged slots found, return early
+        if not reorged_slots:
+            return self._sort_and_reindex_df(reorg_events)
+        
+        # Check which slots have execution payload (not empty)
+        # Use try/except in case some slots don't exist in canonical_beacon_block
+        try:
+            slots_str = ', '.join(str(s) for s in reorged_slots)
+            check_query = f"""
+            SELECT slot
+            FROM canonical_beacon_block FINAL
+            WHERE meta_network_name = '{network_str}'
+            AND slot IN ({slots_str})
+            AND body_execution_payload_block_hash IS NOT NULL
+            """
+            
+            slots_with_payload = self._client.execute_query_df(check_query)
+        except Exception as e:
+            self.logger.warning(f"Failed to check slots with payload: {e}")
+            # If we can't check, assume all reorged slots are empty
+            slots_with_payload = pd.DataFrame()
+        
+        # Filter out slots that have execution payload
+        if not slots_with_payload.empty:
+            slots_with_payload_set = set(slots_with_payload['slot'].tolist())
+            reorg_events = reorg_events[~reorg_events['reorged_slot'].isin(slots_with_payload_set)]
+        
+        # Clean up and format result
+        if not reorg_events.empty:
+            reorg_events = reorg_events.drop_duplicates(subset=['reorged_slot']).sort_values('reorged_slot')
+            # Drop the original 'slot' column before renaming to avoid duplicates
+            reorg_events = reorg_events.drop(columns=['slot'])
+            reorg_events = reorg_events.rename(columns={'reorged_slot': 'slot'})
+        
+        return self._sort_and_reindex_df(reorg_events)
     
     # Validator label methods
     

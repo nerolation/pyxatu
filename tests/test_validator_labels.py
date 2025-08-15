@@ -1,10 +1,9 @@
 """Tests for the validator labels module - updated for current API."""
 
 import pytest
-import asyncio
 import pandas as pd
 from pathlib import Path
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock
 import json
 from datetime import datetime, timedelta
 
@@ -18,7 +17,7 @@ class TestValidatorLabelManager:
     def mock_client(self):
         """Create a mock ClickHouse client."""
         client = Mock()
-        client.execute_query_df = AsyncMock()
+        client.execute_query_df = Mock()
         return client
     
     @pytest.fixture
@@ -26,16 +25,14 @@ class TestValidatorLabelManager:
         """Create a ValidatorLabelManager instance."""
         return ValidatorLabelManager(mock_client)
     
-    @pytest.mark.asyncio
-    async def test_initialization_and_cache(self, manager):
+    def test_initialization_and_cache(self, manager):
         """Test manager initialization and cache paths."""
         # Test that cache directory is set
         assert hasattr(manager, 'CACHE_DIR')
         assert hasattr(manager, 'labels_cache')
         assert manager.labels_cache.name == 'validator_labels.parquet'
     
-    @pytest.mark.asyncio
-    async def test_get_validator_label(self, manager):
+    def test_get_validator_label(self, manager):
         """Test getting label for a single validator."""
         # Mock the internal data
         test_data = pd.DataFrame({
@@ -55,8 +52,7 @@ class TestValidatorLabelManager:
         label = manager.get_validator_label(999)
         assert label is None
     
-    @pytest.mark.asyncio
-    async def test_get_validator_labels_bulk(self, manager):
+    def test_get_validator_labels_bulk(self, manager):
         """Test getting labels for multiple validators."""
         # Mock the internal data
         test_data = pd.DataFrame({
@@ -74,8 +70,7 @@ class TestValidatorLabelManager:
             999: None
         }
     
-    @pytest.mark.asyncio
-    async def test_label_dataframe(self, manager):
+    def test_label_dataframe(self, manager):
         """Test adding labels to an external dataframe."""
         # Mock the internal data
         test_data = pd.DataFrame({
@@ -99,8 +94,7 @@ class TestValidatorLabelManager:
         assert result.loc[2, 'entity'] == 'kraken'
         assert pd.isna(result.loc[3, 'entity'])
     
-    @pytest.mark.asyncio
-    async def test_get_validators_by_entity(self, manager):
+    def test_get_validators_by_entity(self, manager):
         """Test getting all validators for a specific entity."""
         # Mock the internal data
         test_data = pd.DataFrame({
@@ -121,8 +115,7 @@ class TestValidatorLabelManager:
         unknown = manager.get_validators_by_entity('unknown')
         assert unknown == []
     
-    @pytest.mark.asyncio
-    async def test_get_entity_statistics(self, manager):
+    def test_get_entity_statistics(self, manager):
         """Test getting entity statistics."""
         # Mock the internal data
         test_data = pd.DataFrame({
@@ -143,8 +136,7 @@ class TestValidatorLabelManager:
         assert stats.iloc[1]['validator_count'] == 3
         assert stats.iloc[1]['percentage'] == 30.0
     
-    @pytest.mark.asyncio
-    async def test_get_entity_list(self, manager):
+    def test_get_entity_list(self, manager):
         """Test getting list of all entities."""
         # Mock the entity mappings
         manager._entity_mappings = {
@@ -156,8 +148,7 @@ class TestValidatorLabelManager:
         entities = manager.get_entity_list()
         assert set(entities) == {'coinbase', 'kraken', 'lido'}  # sorted order
     
-    @pytest.mark.asyncio
-    async def test_initialize_with_cache(self, manager, tmp_path):
+    def test_initialize_with_cache(self, manager, tmp_path):
         """Test initialization with cached data."""
         # Create mock cache file
         cache_file = tmp_path / "validator_labels.parquet"
@@ -171,14 +162,13 @@ class TestValidatorLabelManager:
         # Mock cache paths
         with patch.object(manager, 'labels_cache', cache_file):
             with patch.object(manager, '_is_cache_valid', return_value=True):
-                await manager.initialize()
+                manager.initialize()
                 
                 # Check that data was loaded
                 assert hasattr(manager, '_validator_labels')
                 assert len(manager._validator_labels) == 3
     
-    @pytest.mark.asyncio 
-    async def test_get_exit_statistics(self, manager):
+    def test_get_exit_statistics(self, manager):
         """Test getting exit statistics."""
         # Mock the internal data with exit information
         test_data = pd.DataFrame({
@@ -197,8 +187,7 @@ class TestValidatorLabelManager:
         assert stats['exited_validators'] == 3
         assert stats['voluntary_exits'] == 3
     
-    @pytest.mark.asyncio
-    async def test_get_active_validators_by_entity(self, manager):
+    def test_get_active_validators_by_entity(self, manager):
         """Test getting active validators for an entity."""
         # Mock the internal data with exit information
         test_data = pd.DataFrame({
@@ -219,11 +208,10 @@ class TestValidatorLabelManagerIntegration:
     """Integration tests with mocked ClickHouse connection."""
     
     @pytest.mark.skip(reason="Complex test with many dependencies - needs refactoring")
-    @pytest.mark.asyncio
-    async def test_full_initialization_flow(self):
+    def test_full_initialization_flow(self):
         """Test the complete initialization flow with mocked data."""
         # Mock the ClickHouse client
-        mock_client = AsyncMock()
+        mock_client = Mock()
         
         # Mock validator data
         validators_df = pd.DataFrame({
@@ -278,7 +266,7 @@ class TestValidatorLabelManagerIntegration:
                 
                 # Create and initialize manager
                 manager = ValidatorLabelManager(mock_client)
-                await manager.initialize()
+                manager.initialize()
                 
                 # Verify initialization
                 assert manager._validator_labels is not None
@@ -297,18 +285,17 @@ class TestValidatorLabelManagerIntegration:
                 exited_validators = manager._validator_labels[manager._validator_labels['exited'] == True]
                 assert len(exited_validators) >= 0  # Just verify the column exists
     
-    @pytest.mark.asyncio
-    async def test_cache_refresh(self):
+    def test_cache_refresh(self):
         """Test cache refresh functionality."""
         # Just test that refresh method exists and can be called
-        mock_client = AsyncMock()
+        mock_client = Mock()
         mock_client.execute_query_df.return_value = pd.DataFrame()
         
         manager = ValidatorLabelManager(mock_client)
         
         # Mock the internal methods to avoid real data loading
-        with patch.object(manager, '_build_validator_labels', new_callable=AsyncMock) as mock_build:
-            await manager.refresh()
+        with patch.object(manager, '_build_validator_labels') as mock_build:
+            manager.refresh()
             
             # Verify that refresh triggers a rebuild
             mock_build.assert_called_once()

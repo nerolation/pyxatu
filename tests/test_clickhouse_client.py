@@ -1,12 +1,11 @@
 """Tests for the secure ClickHouse client."""
 
 import pytest
-import asyncio
-from unittest.mock import Mock, patch, AsyncMock, MagicMock
+from unittest.mock import Mock, patch, MagicMock
 import json
 import pandas as pd
 from io import StringIO
-import aiohttp
+import requests
 
 from pyxatu.core.clickhouse_client import ClickHouseQueryBuilder, ClickHouseClient
 from pyxatu.config import ClickhouseConfig
@@ -165,9 +164,8 @@ class TestClickHouseQueryBuilder:
             builder.build()
 
 
-@pytest.mark.asyncio
 class TestClickHouseClient:
-    """Test the async ClickHouse client."""
+    """Test the synchronous ClickHouse client."""
     
     @pytest.fixture
     def config(self):
@@ -186,109 +184,70 @@ class TestClickHouseClient:
         """Create test client."""
         return ClickHouseClient(config)
         
-    async def test_session_creation(self, client):
+    def test_session_creation(self, config):
         """Test that session is created with proper configuration."""
-        with patch('aiohttp.ClientSession') as mock_session_class:
-            mock_session = AsyncMock()
+        with patch('requests.Session') as mock_session_class:
+            mock_session = Mock()
             mock_session_class.return_value = mock_session
             
-            session = client._get_session()
+            # Create client which should initialize session
+            client = ClickHouseClient(config)
             
-            # Check session was created with correct parameters
+            # Check session was created
             mock_session_class.assert_called_once()
-            call_kwargs = mock_session_class.call_args[1]
             
-            # Check auth
-            assert call_kwargs['auth'].login == 'testuser'
-            assert call_kwargs['auth'].password == 'testpass'
+            # Check auth was set
+            assert client._session.auth.username == 'testuser'
+            assert client._session.auth.password == 'testpass'
             
-            # Check timeout
-            assert call_kwargs['timeout'].total == 30
-            
-            # Check connection pool
-            assert call_kwargs['connector'].limit == 5
-            
-    async def test_execute_query_json(self, client):
+    def test_execute_query_json(self, client):
         """Test executing a query with JSON response."""
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_response.text = AsyncMock(return_value='{"slot":1000,"proposer_index":123}\n{"slot":1001,"proposer_index":456}')
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.text = '{"slot":1000,"proposer_index":123}\n{"slot":1001,"proposer_index":456}'
         mock_response.raise_for_status = Mock()
         
-        with patch('aiohttp.ClientSession') as mock_session_class:
-            # Configure the session mock
-            mock_session = MagicMock()
-            mock_get_context = MagicMock()
-            mock_get_context.__aenter__ = AsyncMock(return_value=mock_response)
-            mock_get_context.__aexit__ = AsyncMock(return_value=None)
-            mock_session.get.return_value = mock_get_context
+        with patch.object(client, '_session') as mock_session:
+            mock_session.get.return_value = mock_response
             
-            # Configure ClientSession to return our mock
-            mock_session_context = MagicMock()
-            mock_session_context.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_session_context.__aexit__ = AsyncMock(return_value=None)
-            mock_session_class.return_value = mock_session_context
-            
-            result = await client.execute_query("SELECT * FROM test")
+            result = client.execute_query("SELECT * FROM test")
             
             assert len(result) == 2
             assert result[0]['slot'] == 1000
             assert result[1]['proposer_index'] == 456
             
-    async def test_execute_query_df(self, client):
+    def test_execute_query_df(self, client):
         """Test executing a query returning DataFrame."""
         tsv_data = "slot\tproposer_index\n1000\t123\n1001\t456"
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_response.text = AsyncMock(return_value=tsv_data)
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.text = tsv_data
         mock_response.raise_for_status = Mock()
         
-        with patch('aiohttp.ClientSession') as mock_session_class:
-            # Configure the session mock
-            mock_session = MagicMock()
-            mock_get_context = MagicMock()
-            mock_get_context.__aenter__ = AsyncMock(return_value=mock_response)
-            mock_get_context.__aexit__ = AsyncMock(return_value=None)
-            mock_session.get.return_value = mock_get_context
+        with patch.object(client, '_session') as mock_session:
+            mock_session.get.return_value = mock_response
             
-            # Configure ClientSession to return our mock
-            mock_session_context = MagicMock()
-            mock_session_context.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_session_context.__aexit__ = AsyncMock(return_value=None)
-            mock_session_class.return_value = mock_session_context
-            
-            df = await client.execute_query_df("SELECT * FROM test")
+            df = client.execute_query_df("SELECT * FROM test")
             
             assert isinstance(df, pd.DataFrame)
             assert len(df) == 2
             assert list(df.columns) == ['slot', 'proposer_index']
             assert df.iloc[0]['slot'] == 1000
             
-    async def test_execute_query_with_params(self, client):
+    def test_execute_query_with_params(self, client):
         """Test query execution with parameters."""
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_response.text = AsyncMock(return_value='{"slot":1000}')
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.text = '{"slot":1000}'
         mock_response.raise_for_status = Mock()
         
-        with patch('aiohttp.ClientSession') as mock_session_class:
-            # Configure the session mock
-            mock_session = MagicMock()
-            mock_get_context = MagicMock()
-            mock_get_context.__aenter__ = AsyncMock(return_value=mock_response)
-            mock_get_context.__aexit__ = AsyncMock(return_value=None)
-            mock_session.get.return_value = mock_get_context
-            
-            # Configure ClientSession to return our mock
-            mock_session_context = MagicMock()
-            mock_session_context.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_session_context.__aexit__ = AsyncMock(return_value=None)
-            mock_session_class.return_value = mock_session_context
+        with patch.object(client, '_session') as mock_session:
+            mock_session.get.return_value = mock_response
             
             query = "SELECT * FROM blocks WHERE slot = %(slot)s"
             params = {'slot': 1000}
             
-            result = await client.execute_query(query, params)
+            result = client.execute_query(query, params)
             
             # Check that params were interpolated
             call_args = mock_session.get.call_args
@@ -296,111 +255,62 @@ class TestClickHouseClient:
             assert '1000' in actual_query
             assert '%(slot)s' not in actual_query
             
-    async def test_empty_response_handling(self, client):
+    def test_empty_response_handling(self, client):
         """Test handling of empty responses."""
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_response.text = AsyncMock(return_value='')
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.text = ''
         mock_response.raise_for_status = Mock()
         
-        with patch('aiohttp.ClientSession') as mock_session_class:
-            # Configure the session mock
-            mock_session = MagicMock()
-            mock_get_context = MagicMock()
-            mock_get_context.__aenter__ = AsyncMock(return_value=mock_response)
-            mock_get_context.__aexit__ = AsyncMock(return_value=None)
-            mock_session.get.return_value = mock_get_context
-            
-            # Configure ClientSession to return our mock
-            mock_session_context = MagicMock()
-            mock_session_context.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_session_context.__aexit__ = AsyncMock(return_value=None)
-            mock_session_class.return_value = mock_session_context
+        with patch.object(client, '_session') as mock_session:
+            mock_session.get.return_value = mock_response
             
             # JSON format should return empty list
-            result = await client.execute_query("SELECT * FROM test")
+            result = client.execute_query("SELECT * FROM test")
             assert result == []
             
             # DataFrame format should return empty DataFrame
-            df = await client.execute_query_df("SELECT * FROM test")
+            df = client.execute_query_df("SELECT * FROM test")
             assert isinstance(df, pd.DataFrame)
             assert len(df) == 0
             
-    async def test_error_handling(self, client):
+    def test_error_handling(self, client):
         """Test error response handling."""
-        mock_response = AsyncMock()
-        mock_response.status = 500
-        mock_response.raise_for_status = Mock(side_effect=aiohttp.ClientResponseError(
-            request_info=Mock(),
-            history=(),
-            status=500,
-            message="Server error"
-        ))
-        mock_response.text = AsyncMock(return_value="Error response")
+        mock_response = Mock()
+        mock_response.status_code = 500
+        mock_response.raise_for_status = Mock(side_effect=requests.HTTPError("500 Server Error"))
+        mock_response.text = "Error response"
         
-        with patch('aiohttp.ClientSession') as mock_session_class:
-            # Configure the session mock
-            mock_session = MagicMock()
-            mock_get_context = MagicMock()
-            mock_get_context.__aenter__ = AsyncMock(return_value=mock_response)
-            mock_get_context.__aexit__ = AsyncMock(return_value=None)
-            mock_session.get.return_value = mock_get_context
+        with patch.object(client, '_session') as mock_session:
+            mock_session.get.return_value = mock_response
             
-            # Configure ClientSession to return our mock
-            mock_session_context = MagicMock()
-            mock_session_context.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_session_context.__aexit__ = AsyncMock(return_value=None)
-            mock_session_class.return_value = mock_session_context
-            
-            with pytest.raises(aiohttp.ClientResponseError, match="Server error"):
-                await client.execute_query("SELECT * FROM test")
+            with pytest.raises(requests.HTTPError, match="500 Server Error"):
+                client.execute_query("SELECT * FROM test")
                 
-    async def test_connection_test(self, client):
+    def test_connection_test(self, client):
         """Test connection testing."""
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_response.text = AsyncMock(return_value='{"test":1}')
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.text = '{"test":1}'
         mock_response.raise_for_status = Mock()
         
-        with patch('aiohttp.ClientSession') as mock_session_class:
-            # Configure the session mock
-            mock_session = MagicMock()
-            mock_get_context = MagicMock()
-            mock_get_context.__aenter__ = AsyncMock(return_value=mock_response)
-            mock_get_context.__aexit__ = AsyncMock(return_value=None)
-            mock_session.get.return_value = mock_get_context
+        with patch.object(client, '_session') as mock_session:
+            mock_session.get.return_value = mock_response
             
-            # Configure ClientSession to return our mock
-            mock_session_context = MagicMock()
-            mock_session_context.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_session_context.__aexit__ = AsyncMock(return_value=None)
-            mock_session_class.return_value = mock_session_context
-            
-            result = await client.test_connection()
+            result = client.test_connection()
             assert result is True
             
-    async def test_get_table_columns(self, client):
+    def test_get_table_columns(self, client):
         """Test fetching table columns."""
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_response.text = AsyncMock(return_value='{"name":"slot"}\n{"name":"proposer_index"}\n{"name":"block_root"}')
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.text = '{"name":"slot"}\n{"name":"proposer_index"}\n{"name":"block_root"}'
         mock_response.raise_for_status = Mock()
         
-        with patch('aiohttp.ClientSession') as mock_session_class:
-            # Configure the session mock
-            mock_session = MagicMock()
-            mock_get_context = MagicMock()
-            mock_get_context.__aenter__ = AsyncMock(return_value=mock_response)
-            mock_get_context.__aexit__ = AsyncMock(return_value=None)
-            mock_session.get.return_value = mock_get_context
+        with patch.object(client, '_session') as mock_session:
+            mock_session.get.return_value = mock_response
             
-            # Configure ClientSession to return our mock
-            mock_session_context = MagicMock()
-            mock_session_context.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_session_context.__aexit__ = AsyncMock(return_value=None)
-            mock_session_class.return_value = mock_session_context
-            
-            columns = await client.get_table_columns('canonical_beacon_block')
+            columns = client.get_table_columns('canonical_beacon_block')
             
             assert columns == ['slot', 'proposer_index', 'block_root']
             
@@ -410,56 +320,51 @@ class TestClickHouseClient:
             assert 'system.columns' in query
             assert 'canonical_beacon_block' in query
             
-    async def test_session_reuse(self, client):
+    def test_session_reuse(self, client):
         """Test that sessions are properly reused."""
-        with patch('aiohttp.ClientSession') as mock_session_class:
-            mock_session = AsyncMock()
-            mock_session.closed = False
-            mock_session_class.return_value = mock_session
+        # The session is created once in __init__ and reused
+        session = client._session
+        
+        # Make multiple requests to ensure session is reused
+        with patch.object(client._session, 'get') as mock_get:
+            mock_response = Mock()
+            mock_response.text = '{\"test\": 1}'
+            mock_response.raise_for_status = Mock()
+            mock_get.return_value = mock_response
             
-            # Get session multiple times
-            session1 = client._get_session()
-            session2 = client._get_session()
-            session3 = client._get_session()
+            client.execute_query("SELECT 1")
+            client.execute_query("SELECT 2")
+            client.execute_query("SELECT 3")
             
-            # Should only create one session
-            mock_session_class.assert_called_once()
-            assert session1 is session2 is session3
+        # Session should still be the same instance
+        assert client._session is session
             
-    async def test_close(self, client):
+    def test_close(self, client):
         """Test client closing."""
-        mock_session = AsyncMock()
-        mock_session.closed = False
+        mock_session = Mock()
         client._session = mock_session
         
-        await client.close()
+        client.close()
         
         mock_session.close.assert_called_once()
         assert client._session is None
         
-    async def test_streaming_query(self, client):
+    def test_streaming_query(self, client):
         """Test streaming query execution."""
-        # Create mock response that yields data in chunks
-        async def mock_content_iter():
-            yield b'{"slot":1000}\n'
-            yield b'{"slot":1001}\n'
-            yield b'{"slot":1002}\n'
+        # Create mock response that yields data in lines
+        def mock_lines_iter():
+            return ['{"slot":1000}', '{"slot":1001}', '{"slot":1002}']
             
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_response.content = mock_content_iter()
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.iter_lines.return_value = mock_lines_iter()
+        mock_response.raise_for_status = Mock()
         
-        with patch.object(client, '_get_session') as mock_get_session:
-            mock_session = Mock()
-            # Configure the async context manager properly
-            mock_context = MagicMock()
-            mock_context.__aenter__ = AsyncMock(return_value=mock_response)
-            mock_context.__aexit__ = AsyncMock(return_value=None)
-            mock_session.get.return_value = mock_context
-            mock_get_session.return_value = mock_session
+        with patch.object(client, '_session') as mock_session:
+            mock_session.get.return_value = mock_response
             
             chunks = []
-            async for chunk in client.execute_query_stream("SELECT * FROM test", chunk_size=2):
+            for chunk in client.execute_query_stream("SELECT * FROM test", chunk_size=2):
                 chunks.append(chunk)
                 
             assert len(chunks) == 2

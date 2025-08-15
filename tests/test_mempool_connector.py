@@ -1,8 +1,7 @@
 """Tests for mempool connector - simplified to match current implementation."""
 
 import pytest
-import asyncio
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, patch
 from datetime import datetime, timedelta
 import pandas as pd
 import json
@@ -30,30 +29,26 @@ class TestMempoolConnector:
         """Create mempool connector instance."""
         return MempoolConnector(config)
         
-    @pytest.mark.asyncio
-    async def test_initialization(self, connector, config):
+    def test_initialization(self, connector, config):
         """Test connector initialization."""
         assert connector.config == config
         assert connector._session is None
         assert connector.config.cache_dir.exists()
         
-    @pytest.mark.asyncio
-    async def test_connect_disconnect(self, connector):
+    def test_connect_disconnect(self, connector):
         """Test connect and disconnect methods."""
-        await connector.connect()
+        connector.connect()
         assert connector._session is not None
         
-        await connector.disconnect()
+        connector.disconnect()
         # Session should be closed
         
-    @pytest.mark.asyncio
-    async def test_context_manager(self, config):
-        """Test async context manager."""
-        async with MempoolConnector(config) as connector:
+    def test_context_manager(self, config):
+        """Test context manager."""
+        with MempoolConnector(config) as connector:
             assert connector._session is not None
             
-    @pytest.mark.asyncio
-    async def test_fetch_data_basic(self, connector):
+    def test_fetch_data_basic(self, connector):
         """Test basic data fetching."""
         mock_data = {
             "transactions": [
@@ -62,52 +57,45 @@ class TestMempoolConnector:
             ]
         }
         
-        with patch('aiohttp.ClientSession.get') as mock_get:
-            mock_resp = AsyncMock()
-            mock_resp.status = 200
-            mock_resp.json = AsyncMock(return_value=mock_data)
+        with patch('requests.Session.get') as mock_get:
+            mock_resp = Mock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = mock_data
             mock_resp.raise_for_status = Mock()
+            mock_get.return_value = mock_resp
             
-            mock_context = AsyncMock()
-            mock_context.__aenter__.return_value = mock_resp
-            mock_context.__aexit__.return_value = None
-            mock_get.return_value = mock_context
-            
-            result = await connector.fetch_data(
+            result = connector.fetch_data(
                 timestamp=datetime(2023, 1, 1),
                 source="flashbots"
             )
             
             assert result is not None
             
-    @pytest.mark.asyncio
-    async def test_caching(self, connector, tmp_path):
+    def test_caching(self, connector, tmp_path):
         """Test caching functionality."""
         test_data = [{"test": "data"}]
         source = "flashbots"
         timestamp = datetime(2023, 1, 1)
         
         # Cache data
-        await connector._cache_data(source, timestamp, test_data)
+        connector._cache_data(source, timestamp, test_data)
         
         # Retrieve cached data
-        cached = await connector._get_cached_data(source, timestamp)
+        cached = connector._get_cached_data(source, timestamp)
         assert cached == test_data
         
-    @pytest.mark.asyncio
-    async def test_clear_cache(self, connector):
+    def test_clear_cache(self, connector):
         """Test cache clearing."""
         # Add some test cache files
         test_data = [{"test": "data"}]
-        await connector._cache_data("flashbots", datetime(2023, 1, 1), test_data)
-        await connector._cache_data("flashbots", datetime(2023, 1, 2), test_data)
+        connector._cache_data("flashbots", datetime(2023, 1, 1), test_data)
+        connector._cache_data("flashbots", datetime(2023, 1, 2), test_data)
         
         # Clear cache
-        cleared = await connector.clear_cache()
+        cleared = connector.clear_cache()
         assert cleared >= 0
         
-    @pytest.mark.asyncio
-    async def test_fetch_multiple_timestamps(self, connector):
+    def test_fetch_multiple_timestamps(self, connector):
         """Test fetching data for multiple timestamps."""
         start_time = datetime(2023, 1, 1, 0, 0)
         end_time = datetime(2023, 1, 1, 0, 10)
@@ -119,7 +107,7 @@ class TestMempoolConnector:
                 {"hash": "0x456", "from": "0xdef"}
             ]
             
-            results = await connector.fetch_multiple_timestamps(
+            results = connector.fetch_multiple_timestamps(
                 source="flashbots",
                 start_time=start_time,
                 end_time=end_time,

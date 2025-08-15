@@ -16,7 +16,7 @@ class SlotDataFetcher(BaseDataFetcher[Block]):
         """Return the primary table name."""
         return 'canonical_beacon_block'
         
-    async def fetch(self, params: SlotQueryParams) -> pd.DataFrame:
+    def fetch(self, params: SlotQueryParams) -> pd.DataFrame:
         """Fetch slot/block data based on parameters."""
         builder = ClickHouseQueryBuilder()
         builder.select(params.columns).from_table(self.get_table_name())
@@ -46,12 +46,12 @@ class SlotDataFetcher(BaseDataFetcher[Block]):
             builder.limit(params.limit)
             
         query, query_params = builder.build()
-        return await self.client.execute_query_df(query, query_params)
+        return self.client.execute_query_df(query, query_params)
         
-    async def fetch_with_missed(self, params: SlotQueryParams) -> pd.DataFrame:
+    def fetch_with_missed(self, params: SlotQueryParams) -> pd.DataFrame:
         """Fetch slots including missed slots."""
         # Get canonical blocks
-        df = await self.fetch(params)
+        df = self.fetch(params)
         
         if df.empty:
             return df
@@ -89,20 +89,25 @@ class SlotDataFetcher(BaseDataFetcher[Block]):
             
         return result
         
-    async def fetch_missed_slots(
+    def fetch_missed_slots(
         self, 
         slot_range: Optional[List[int]] = None,
         network: str = 'mainnet'
     ) -> Set[int]:
         """Get set of missed slots in a range."""
+        from pyxatu.models import Network
+        
+        # Convert string to Network enum if needed
+        network_enum = Network(network) if isinstance(network, str) else network
+        
         params = SlotQueryParams(
             slot=slot_range,
             columns='slot',
-            network=network,
+            network=network_enum,
             orderby='slot'
         )
         
-        df = await self.fetch(params)
+        df = self.fetch(params)
         
         if df.empty:
             return set()
@@ -115,42 +120,73 @@ class SlotDataFetcher(BaseDataFetcher[Block]):
         
         return all_slots - existing_slots
         
-    async def fetch_reorgs(self, params: SlotQueryParams) -> pd.DataFrame:
-        """Fetch chain reorganization data."""
-        # First get potential reorgs
+    def fetch_reorgs(self, params: SlotQueryParams) -> pd.DataFrame:
+        """Fetch chain reorganization data.
+        
+        Returns slots that were reorged AND are missing (empty slots without execution payload).
+        """
+        # First get the reorg events to find affected slots
         builder = ClickHouseQueryBuilder()
-        builder.select('(slot-depth) as reorged_slot')
+        builder.select('slot, depth, slot - depth as reorged_slot, old_head_block, new_head_block')
         builder.from_table('beacon_api_eth_v1_events_chain_reorg')
         
+        # Apply slot filter if provided
         if params.slot:
             if isinstance(params.slot, int):
-                # For single slot, look at reorgs around it
-                builder.where_between('slot', params.slot - 32, params.slot + 32)
+                # For single slot, check if it was reorged
+                builder.where_raw(f"(slot - depth) = {params.slot}")
             else:
-                # For range, expand the search window
-                builder.where_between('slot', params.slot[0] - 32, params.slot[1] + 31)
+                # For range, find reorgs affecting slots in that range
+                builder.where_raw(f"(slot - depth) >= {params.slot[0]} AND (slot - depth) < {params.slot[1]}")
                 
         builder.where('meta_network_name', '=', params.network.value)
         
         if params.where:
             builder.where_raw(params.where)
             
+        # Get all reorg events
         query, query_params = builder.build()
-        potential_reorgs = await self.client.execute_query_df(query, query_params)
+        reorg_events = self.client.execute_query_df(query, query_params)
         
-        if potential_reorgs.empty:
-            return pd.DataFrame(columns=['slot'])
+        if reorg_events.empty:
+            return pd.DataFrame(columns=['slot', 'depth', 'old_head_block', 'new_head_block'])
             
-        # Get missed slots in the range
-        missed_slots = await self.fetch_missed_slots(params.slot, params.network.value)
+        # Get unique reorged slots
+        reorged_slots = set(reorg_events['reorged_slot'].unique())
         
-        # Find intersection
-        reorged_slots = set(potential_reorgs['reorged_slot'].tolist())
-        actual_reorgs = sorted(reorged_slots.intersection(missed_slots))
+        # If no reorged slots found, return early
+        if not reorged_slots:
+            return reorg_events[['slot', 'depth', 'old_head_block', 'new_head_block']] if not reorg_events.empty else reorg_events
         
-        return pd.DataFrame({'slot': actual_reorgs})
+        # Now check which of these slots are actually missing (empty blocks)
+        # A slot is considered "missed" if it doesn't have an execution payload
+        check_builder = ClickHouseQueryBuilder()
+        check_builder.select('slot')
+        check_builder.from_table('canonical_beacon_block')
+        check_builder.where('meta_network_name', '=', params.network.value)
+        check_builder.where_in('slot', list(reorged_slots))
+        # Empty slots have null execution payload block hash
+        check_builder.where_raw('body_execution_payload_block_hash IS NOT NULL')
         
-    async def get_checkpoints(self, slot: int, network: str = 'mainnet') -> tuple[str, str, str]:
+        check_query, check_params = check_builder.build()
+        slots_with_payload = self.client.execute_query_df(check_query, check_params)
+        
+        # Slots that exist and have execution payload are not truly "missed"
+        if not slots_with_payload.empty:
+            slots_with_payload_set = set(slots_with_payload['slot'].unique())
+            reorged_slots = reorged_slots - slots_with_payload_set
+        
+        # Get the reorg event details for the truly missed slots
+        result = reorg_events[reorg_events['reorged_slot'].isin(reorged_slots)].copy()
+        
+        # Clean up and format the result
+        if not result.empty:
+            result = result.drop_duplicates(subset=['reorged_slot']).sort_values('reorged_slot')
+            result = result.rename(columns={'reorged_slot': 'slot'})
+            
+        return result
+        
+    def get_checkpoints(self, slot: int, network: str = 'mainnet') -> tuple[str, str, str]:
         """Get head, target, and source checkpoints for a slot."""
         epoch_start = (slot // 32) * 32
         last_epoch_start = epoch_start - 32
@@ -163,7 +199,7 @@ class SlotDataFetcher(BaseDataFetcher[Block]):
             orderby='slot'
         )
         
-        slots_df = await self.fetch(params)
+        slots_df = self.fetch(params)
         
         if slots_df.empty:
             raise ValueError(f"No blocks found for slot {slot}")
@@ -197,73 +233,66 @@ class SlotDataFetcher(BaseDataFetcher[Block]):
             
         return head, target, source
     
-    async def fetch_checkpoints(self, params: SlotQueryParams) -> pd.DataFrame:
+    def fetch_checkpoints(self, params: SlotQueryParams) -> pd.DataFrame:
         """Fetch checkpoint data for slots."""
-        query = f"""
-        SELECT
-            slot,
-            slot_start_date_time,
-            epoch,
-            execution_optimistic,
-            finalized,
-            attestation_source_checkpoint_root,
-            attestation_target_checkpoint_root,
-            meta_consensus_version,
-            meta_network_name
-        FROM canonical_beacon_block
-        WHERE {self._build_where_clause(params)}
-        {self._build_order_clause(params)}
-        {self._build_limit_clause(params)}
-        """
+        builder = ClickHouseQueryBuilder()
+        builder.select(params.columns).from_table('canonical_beacon_block')
         
-        return await self.client.execute_query_df(query)
+        # Add slot filter with partition optimization
+        if params.slot is not None:
+            if isinstance(params.slot, int):
+                builder.where_slot_with_partition(params.slot)
+            else:
+                builder.where_slot_with_partition(params.slot[0], params.slot[1])
+                
+        # Add network filter
+        builder.where('meta_network_name', '=', params.network.value)
+        
+        # Add custom where conditions
+        if params.where:
+            builder.where_raw(params.where)
+            
+        # Add ordering
+        if params.orderby:
+            desc = params.orderby.startswith('-')
+            column = params.orderby.lstrip('-')
+            builder.order_by(column, desc)
+            
+        # Add limit
+        if params.limit:
+            builder.limit(params.limit)
+            
+        query, query_params = builder.build()
+        return self.client.execute_query_df(query, query_params)
     
-    async def fetch_beacon_blocks_v2(self, params: SlotQueryParams) -> pd.DataFrame:
+    def fetch_beacon_blocks_v2(self, params: SlotQueryParams) -> pd.DataFrame:
         """Fetch beacon block v2 data."""
-        query = f"""
-        SELECT
-            slot,
-            slot_start_date_time,
-            epoch,
-            block_root,
-            parent_root,
-            state_root,
-            proposer_index,
-            body_attestations_count,
-            body_attestation_aggregation_bits_count,
-            body_voluntary_exits_count,
-            body_slashings_attester_count,
-            body_slashings_proposer_count,
-            body_deposits_count,
-            body_eth1_data_block_hash,
-            body_eth1_data_deposit_root,
-            body_eth1_data_deposit_count,
-            body_graffiti,
-            body_sync_aggregate_sync_committee_bits,
-            body_sync_aggregate_sync_committee_signature,
-            body_execution_payload_block_hash,
-            body_execution_payload_block_number,
-            body_execution_payload_parent_hash,
-            body_execution_payload_fee_recipient,
-            body_execution_payload_state_root,
-            body_execution_payload_receipts_root,
-            body_execution_payload_logs_bloom,
-            body_execution_payload_prev_randao,
-            body_execution_payload_extra_data,
-            body_execution_payload_base_fee_per_gas,
-            body_execution_payload_gas_limit,
-            body_execution_payload_gas_used,
-            body_execution_payload_timestamp,
-            body_execution_payload_transactions_count,
-            body_execution_payload_withdrawals_count,
-            execution_optimistic,
-            finalized,
-            meta_network_name,
-            meta_consensus_version
-        FROM canonical_beacon_block
-        WHERE {self._build_where_clause(params)}
-        {self._build_order_clause(params)}
-        {self._build_limit_clause(params)}
-        """
+        builder = ClickHouseQueryBuilder()
+        builder.select(params.columns).from_table('canonical_beacon_block')
         
-        return await self.client.execute_query_df(query)
+        # Add slot filter with partition optimization
+        if params.slot is not None:
+            if isinstance(params.slot, int):
+                builder.where_slot_with_partition(params.slot)
+            else:
+                builder.where_slot_with_partition(params.slot[0], params.slot[1])
+                
+        # Add network filter
+        builder.where('meta_network_name', '=', params.network.value)
+        
+        # Add custom where conditions
+        if params.where:
+            builder.where_raw(params.where)
+            
+        # Add ordering
+        if params.orderby:
+            desc = params.orderby.startswith('-')
+            column = params.orderby.lstrip('-')
+            builder.order_by(column, desc)
+            
+        # Add limit
+        if params.limit:
+            builder.limit(params.limit)
+            
+        query, query_params = builder.build()
+        return self.client.execute_query_df(query, query_params)

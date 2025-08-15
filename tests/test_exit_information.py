@@ -2,7 +2,7 @@
 
 import pytest
 import pandas as pd
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, patch
 from pyxatu.validator_labels import ValidatorLabelManager
 
 
@@ -13,7 +13,7 @@ class TestValidatorExitInformation:
     def mock_client(self):
         """Create a mock ClickHouse client."""
         client = Mock()
-        client.execute_query_df = AsyncMock()
+        client.execute_query_df = Mock()
         return client
     
     @pytest.fixture
@@ -35,8 +35,7 @@ class TestValidatorExitInformation:
                       'lido', 'coinbase', 'kiln', None, None]
         })
     
-    @pytest.mark.asyncio
-    async def test_get_voluntary_exits(self, manager, mock_client):
+    def test_get_voluntary_exits(self, manager, mock_client):
         """Test getting voluntary exit information."""
         # Mock query result
         mock_exits = pd.DataFrame({
@@ -48,7 +47,7 @@ class TestValidatorExitInformation:
         mock_client.execute_query_df.return_value = mock_exits
         
         # Get voluntary exits
-        exits = await manager._get_voluntary_exits()
+        exits = manager._get_voluntary_exits()
         
         # Verify
         assert len(exits) == 3
@@ -56,8 +55,7 @@ class TestValidatorExitInformation:
         assert 'exit_epoch' in exits.columns
         assert mock_client.execute_query_df.called
     
-    @pytest.mark.asyncio
-    async def test_get_attester_slashings(self, manager, mock_client):
+    def test_get_attester_slashings(self, manager, mock_client):
         """Test getting attester slashing information."""
         # Mock query result
         mock_slashings = pd.DataFrame({
@@ -68,15 +66,14 @@ class TestValidatorExitInformation:
         mock_client.execute_query_df.return_value = mock_slashings
         
         # Get attester slashings
-        slashings = await manager._get_attester_slashings()
+        slashings = manager._get_attester_slashings()
         
         # Verify
         assert len(slashings) == 2
         assert 'validator_index' in slashings.columns
         assert 'epoch' in slashings.columns
     
-    @pytest.mark.asyncio
-    async def test_get_proposer_slashings(self, manager, mock_client):
+    def test_get_proposer_slashings(self, manager, mock_client):
         """Test getting proposer slashing information."""
         # Mock query result
         mock_slashings = pd.DataFrame({
@@ -87,14 +84,13 @@ class TestValidatorExitInformation:
         mock_client.execute_query_df.return_value = mock_slashings
         
         # Get proposer slashings
-        slashings = await manager._get_proposer_slashings()
+        slashings = manager._get_proposer_slashings()
         
         # Verify
         assert len(slashings) == 1
         assert slashings.iloc[0]['validator_index'] == 8
     
-    @pytest.mark.asyncio
-    async def test_apply_exit_information(self, manager, mock_client, mock_validators):
+    def test_apply_exit_information(self, manager, mock_client, mock_validators):
         """Test applying exit information to validators."""
         # Mock exit data
         voluntary_exits = pd.DataFrame({
@@ -124,7 +120,7 @@ class TestValidatorExitInformation:
         ]
         
         # Apply exit information
-        result = await manager._apply_exit_information(mock_validators.copy())
+        result = manager._apply_exit_information(mock_validators.copy())
         
         # Verify columns added
         assert 'exited' in result.columns
@@ -217,18 +213,17 @@ class TestValidatorExitInformation:
         assert 1 not in active_kiln  # exited
         assert 3 not in active_kiln  # exited
     
-    @pytest.mark.asyncio
-    async def test_error_handling(self, manager, mock_client):
+    def test_error_handling(self, manager, mock_client):
         """Test error handling in exit queries."""
         # Mock query error
         mock_client.execute_query_df.side_effect = Exception("Query timeout")
         
         # Should return empty DataFrame on error
-        exits = await manager._get_voluntary_exits()
+        exits = manager._get_voluntary_exits()
         assert exits.empty
         
-        slashings = await manager._get_attester_slashings()
+        slashings = manager._get_attester_slashings()
         assert slashings.empty
         
-        prop_slashings = await manager._get_proposer_slashings()
+        prop_slashings = manager._get_proposer_slashings()
         assert prop_slashings.empty

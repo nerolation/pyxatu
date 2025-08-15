@@ -22,7 +22,7 @@ class TransactionDataFetcher(BaseDataFetcher[Transaction]):
         """Return the primary table name."""
         return 'canonical_beacon_block_execution_transaction'
         
-    async def fetch(self, params: SlotQueryParams) -> pd.DataFrame:
+    def fetch(self, params: SlotQueryParams) -> pd.DataFrame:
         """Fetch transaction data."""
         builder = ClickHouseQueryBuilder()
         builder.select(params.columns).from_table(self.get_table_name())
@@ -52,9 +52,9 @@ class TransactionDataFetcher(BaseDataFetcher[Transaction]):
             builder.limit(params.limit)
             
         query, query_params = builder.build()
-        return await self.client.execute_query_df(query, query_params)
+        return self.client.execute_query_df(query, query_params)
         
-    async def fetch_el_transactions(self, params: SlotQueryParams) -> pd.DataFrame:
+    def fetch_el_transactions(self, params: SlotQueryParams) -> pd.DataFrame:
         """Fetch execution layer transaction data."""
         builder = ClickHouseQueryBuilder()
         builder.select(params.columns)
@@ -88,9 +88,9 @@ class TransactionDataFetcher(BaseDataFetcher[Transaction]):
             builder.limit(params.limit)
             
         query, query_params = builder.build()
-        return await self.client.execute_query_df(query, query_params)
+        return self.client.execute_query_df(query, query_params)
         
-    async def fetch_mempool_transactions(
+    def fetch_mempool_transactions(
         self,
         slot_range: List[int],
         network: str = 'mainnet',
@@ -113,9 +113,9 @@ class TransactionDataFetcher(BaseDataFetcher[Transaction]):
         builder.where('meta_network_name', '=', network)
         
         query, query_params = builder.build()
-        return await self.client.execute_query_df(query, query_params)
+        return self.client.execute_query_df(query, query_params)
         
-    async def fetch_elaborated_transactions(
+    def fetch_elaborated_transactions(
         self,
         slots: List[int],
         network: str = 'mainnet',
@@ -131,7 +131,7 @@ class TransactionDataFetcher(BaseDataFetcher[Transaction]):
                 columns='slot,position,hash,from_address,to_address,value,gas,gas_price',
                 network=network
             )
-            slot_txs = await self.fetch(params)
+            slot_txs = self.fetch(params)
             all_transactions.append(slot_txs)
             
         if not all_transactions:
@@ -146,7 +146,7 @@ class TransactionDataFetcher(BaseDataFetcher[Transaction]):
         mempool_hashes = set()
         
         # 1. Xatu mempool data
-        xatu_mempool = await self.fetch_mempool_transactions(
+        xatu_mempool = self.fetch_mempool_transactions(
             [min(slots), max(slots) + 1],
             network
         )
@@ -158,7 +158,7 @@ class TransactionDataFetcher(BaseDataFetcher[Transaction]):
             for slot in slots:
                 try:
                     # Fetch from Flashbots
-                    flashbots_data = await self.mempool_connector.fetch_data(
+                    flashbots_data = self.mempool_connector.fetch_data(
                         source='flashbots',
                         timestamp=slot_to_timestamp(slot)
                     )
@@ -166,7 +166,7 @@ class TransactionDataFetcher(BaseDataFetcher[Transaction]):
                         mempool_hashes.update(tx['hash'].lower() for tx in flashbots_data)
                         
                     # Fetch from Blocknative
-                    blocknative_data = await self.mempool_connector.fetch_data(
+                    blocknative_data = self.mempool_connector.fetch_data(
                         source='blocknative',
                         timestamp=slot_to_timestamp(slot)
                     )
@@ -189,7 +189,7 @@ class TransactionDataFetcher(BaseDataFetcher[Transaction]):
         
         return transactions_df
         
-    async def fetch_withdrawals(self, params: SlotQueryParams) -> pd.DataFrame:
+    def fetch_withdrawals(self, params: SlotQueryParams) -> pd.DataFrame:
         """Fetch withdrawal data."""
         builder = ClickHouseQueryBuilder()
         builder.select(params.columns)
@@ -220,9 +220,9 @@ class TransactionDataFetcher(BaseDataFetcher[Transaction]):
             builder.limit(params.limit)
             
         query, query_params = builder.build()
-        return await self.client.execute_query_df(query, query_params)
+        return self.client.execute_query_df(query, query_params)
         
-    async def fetch_blob_sidecars(self, params: SlotQueryParams) -> pd.DataFrame:
+    def fetch_blob_sidecars(self, params: SlotQueryParams) -> pd.DataFrame:
         """Fetch blob sidecar data (EIP-4844)."""
         builder = ClickHouseQueryBuilder()
         builder.select(params.columns)
@@ -253,9 +253,9 @@ class TransactionDataFetcher(BaseDataFetcher[Transaction]):
             builder.limit(params.limit)
             
         query, query_params = builder.build()
-        return await self.client.execute_query_df(query, query_params)
+        return self.client.execute_query_df(query, query_params)
         
-    async def fetch_block_sizes(self, params: SlotQueryParams) -> pd.DataFrame:
+    def fetch_block_sizes(self, params: SlotQueryParams) -> pd.DataFrame:
         """Fetch block size metrics."""
         # Ensure we get the required columns
         required_columns = [
@@ -287,7 +287,7 @@ class TransactionDataFetcher(BaseDataFetcher[Transaction]):
         # Fetch slot data
         from pyxatu.queries.slot_queries import SlotDataFetcher
         slot_fetcher = SlotDataFetcher(self.client)
-        df = await slot_fetcher.fetch_with_missed(params)
+        df = slot_fetcher.fetch_with_missed(params)
         
         # Process blob gas to blob count
         if 'execution_payload_blob_gas_used' in df.columns:
@@ -304,27 +304,35 @@ class TransactionDataFetcher(BaseDataFetcher[Transaction]):
             
         return df
     
-    async def fetch_blob_events(self, params: SlotQueryParams) -> pd.DataFrame:
+    def fetch_blob_events(self, params: SlotQueryParams) -> pd.DataFrame:
         """Fetch blob sidecar events from beacon API."""
-        query = f"""
-        SELECT
-            slot,
-            slot_start_date_time,
-            epoch,
-            wallclock_slot,
-            wallclock_epoch,
-            propagation_slot_start_diff,
-            block_root,
-            blob_index,
-            kzg_commitment,
-            versioned_hash,
-            meta_client_name,
-            meta_client_version,
-            meta_network_name
-        FROM beacon_api_eth_v1_events_blob_sidecar
-        WHERE {self._build_where_clause(params)}
-        {self._build_order_clause(params)}
-        {self._build_limit_clause(params)}
-        """
+        builder = ClickHouseQueryBuilder()
+        builder.select(params.columns)
+        builder.from_table('beacon_api_eth_v1_events_blob_sidecar')
         
-        return await self.client.execute_query_df(query)
+        # Add slot filter with partition optimization
+        if params.slot is not None:
+            if isinstance(params.slot, int):
+                builder.where_slot_with_partition(params.slot)
+            else:
+                builder.where_slot_with_partition(params.slot[0], params.slot[1])
+                
+        # Add network filter
+        builder.where('meta_network_name', '=', params.network.value)
+        
+        # Add custom conditions
+        if params.where:
+            builder.where_raw(params.where)
+            
+        # Add ordering
+        if params.orderby:
+            desc = params.orderby.startswith('-')
+            column = params.orderby.lstrip('-')
+            builder.order_by(column, desc)
+            
+        # Add limit
+        if params.limit:
+            builder.limit(params.limit)
+            
+        query, query_params = builder.build()
+        return self.client.execute_query_df(query, query_params)

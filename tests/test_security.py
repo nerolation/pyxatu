@@ -1,8 +1,7 @@
 """Security tests for PyXatu - ensuring all vulnerabilities are fixed."""
 
 import pytest
-import asyncio
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import Mock, patch
 
 from pyxatu.core.clickhouse_client import ClickHouseQueryBuilder, ClickHouseClient
 from pyxatu.models import SlotQueryParams, Network
@@ -193,11 +192,10 @@ class TestConfigurationSecurity:
         assert config.clickhouse.password.get_secret_value() == 'env-secret-password'
         
 
-@pytest.mark.asyncio
-class TestAsyncSafety:
-    """Test async operation safety."""
+class TestSyncSafety:
+    """Test synchronous operation safety."""
     
-    async def test_connection_pooling(self):
+    def test_connection_pooling(self):
         """Test that connections are properly pooled and closed."""
         config = ClickhouseConfig(
             url="https://clickhouse.example.com",
@@ -219,7 +217,7 @@ class TestAsyncSafety:
         assert session1 is not None
         
         # Close should close session
-        await client.close()
+        client.close()
             
 
 def test_no_hardcoded_credentials():

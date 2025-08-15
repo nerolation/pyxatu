@@ -1,9 +1,7 @@
 """PyXatu - Python client for querying Ethereum beacon chain data."""
 
-# Import the synchronous version by default for simplicity
-from pyxatu.pyxatu_sync import PyXatu
-# Keep async version available for those who need it
-from pyxatu.pyxatu import PyXatu as PyXatuAsync
+# Import the main PyXatu class
+from pyxatu.pyxatu import PyXatu
 from pyxatu.models import (
     Network, VoteType, AttestationStatus,
     Block, Attestation, Transaction, Withdrawal
@@ -14,9 +12,8 @@ __version__ = "1.9.1"
 __author__ = "PyXatu Contributors"
 
 __all__ = [
-    # Main classes
-    "PyXatu",  # Synchronous version (default)
-    "PyXatuAsync",  # Async version for advanced use
+    # Main class
+    "PyXatu",
     
     # Enums
     "Network",

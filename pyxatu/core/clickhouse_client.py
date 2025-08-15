@@ -171,6 +171,10 @@ class ClickHouseQueryBuilder:
             )
         return self
         
+    def where_in(self, column: str, values: List[Any]) -> 'ClickHouseQueryBuilder':
+        """Add WHERE IN condition."""
+        return self.where(column, 'IN', values)
+        
     def where_raw(self, condition: str, params: Optional[Dict[str, Any]] = None) -> 'ClickHouseQueryBuilder':
         """Add raw WHERE condition (use with caution)."""
         # Basic validation to prevent obvious SQL injection

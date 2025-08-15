@@ -26,7 +26,7 @@ class AttestationDataFetcher(BaseDataFetcher[Attestation]):
         """Return the primary table name."""
         return 'canonical_beacon_elaborated_attestation'
         
-    async def fetch(self, params: SlotQueryParams) -> pd.DataFrame:
+    def fetch(self, params: SlotQueryParams) -> pd.DataFrame:
         """Fetch attestation data."""
         builder = ClickHouseQueryBuilder()
         builder.select(params.columns).from_table(self.get_table_name())
@@ -60,7 +60,7 @@ class AttestationDataFetcher(BaseDataFetcher[Attestation]):
             builder.limit(params.limit)
             
         query, query_params = builder.build()
-        df = await self.client.execute_query_df(query, query_params)
+        df = self.client.execute_query_df(query, query_params)
         
         # Process validators column if present
         if 'validators' in df.columns:
@@ -86,7 +86,7 @@ class AttestationDataFetcher(BaseDataFetcher[Attestation]):
             self.logger.error(f"Failed to parse validators: {validators_str}, error: {e}")
             return []
             
-    async def fetch_attestation_events(
+    def fetch_attestation_events(
         self, 
         params: SlotQueryParams,
         use_final: bool = False
@@ -116,9 +116,9 @@ class AttestationDataFetcher(BaseDataFetcher[Attestation]):
             builder.limit(params.limit)
             
         query, query_params = builder.build()
-        return await self.client.execute_query_df(query, query_params)
+        return self.client.execute_query_df(query, query_params)
         
-    async def fetch_elaborated_attestations(
+    def fetch_elaborated_attestations(
         self,
         slot_range: List[int],
         vote_types: List[VoteType] = None,
@@ -139,10 +139,10 @@ class AttestationDataFetcher(BaseDataFetcher[Attestation]):
             network=network,
             orderby='slot'
         )
-        attestations = await self.fetch(att_params)
+        attestations = self.fetch(att_params)
         
         # Fetch duties
-        duties = await self._fetch_duties(att_params)
+        duties = self._fetch_duties(att_params)
         
         # Process each slot
         results = []
@@ -154,13 +154,13 @@ class AttestationDataFetcher(BaseDataFetcher[Attestation]):
                 
             # Get checkpoints for this slot
             try:
-                head, target, source = await self.slot_fetcher.get_checkpoints(slot, network)
+                head, target, source = self.slot_fetcher.get_checkpoints(slot, network)
             except Exception as e:
                 self.logger.warning(f"Failed to get checkpoints for slot {slot}: {e}")
                 continue
                 
             # Process attestations for this slot
-            slot_results = await self._process_slot_attestations(
+            slot_results = self._process_slot_attestations(
                 slot, attestations, duties, 
                 head, target, source,
                 vote_types, status_filter, include_delay
@@ -169,7 +169,7 @@ class AttestationDataFetcher(BaseDataFetcher[Attestation]):
             
         return pd.DataFrame(results)
         
-    async def _fetch_duties(self, params: SlotQueryParams) -> pd.DataFrame:
+    def _fetch_duties(self, params: SlotQueryParams) -> pd.DataFrame:
         """Fetch validator duties."""
         builder = ClickHouseQueryBuilder()
         builder.select('slot,validators')
@@ -180,7 +180,7 @@ class AttestationDataFetcher(BaseDataFetcher[Attestation]):
         builder.where('meta_network_name', '=', params.network.value)
         
         query, query_params = builder.build()
-        committee_df = await self.client.execute_query_df(query, query_params)
+        committee_df = self.client.execute_query_df(query, query_params)
         
         # Process committee data
         committee_df['validators'] = committee_df['validators'].apply(self._parse_validators)
@@ -200,7 +200,7 @@ class AttestationDataFetcher(BaseDataFetcher[Attestation]):
                 
         return pd.DataFrame(duties_data)
         
-    async def _process_slot_attestations(
+    def _process_slot_attestations(
         self,
         slot: int,
         attestations: pd.DataFrame,
@@ -292,6 +292,6 @@ class AttestationDataFetcher(BaseDataFetcher[Attestation]):
                     
         return results
     
-    async def fetch_duties(self, params: SlotQueryParams) -> pd.DataFrame:
+    def fetch_duties(self, params: SlotQueryParams) -> pd.DataFrame:
         """Fetch attester duty assignments (public wrapper)."""
-        return await self._fetch_duties(params)
+        return self._fetch_duties(params)
