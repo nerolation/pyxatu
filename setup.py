@@ -20,7 +20,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'xatu=pyxatu.cli:cli',
+            'xatu=pyxatu.cli.commands:cli',
         ],
     },
     author='Toni Wahrstätter',

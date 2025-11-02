@@ -15,13 +15,13 @@ from requests.auth import HTTPBasicAuth
 import pandas as pd
 from tqdm.auto import tqdm
 
-from pyxatu.utils import CONSTANTS
-from pyxatu.helpers import PyXatuHelpers
-from pyxatu.client import ClickhouseClient
-from pyxatu.mempoolconnector import MempoolConnector
-from pyxatu.retriever import DataRetriever
-from pyxatu.validators import ValidatorGadget
-from pyxatu.relayendpoint import MevBoostCaller
+from ..utils import CONSTANTS
+from ..utils.helpers import PyXatuHelpers
+from .client import ClickhouseClient
+from ..integrations.mempool import MempoolConnector
+from .retriever import DataRetriever
+from ..integrations.validators import ValidatorGadget
+from ..integrations.relay import MevBoostCaller
 
 
 def column_check_decorator(func):
@@ -49,29 +49,18 @@ class PyXatu:
         config_path: Optional[str] = None, 
         use_env_variables: bool = False, 
         log_level: str = 'INFO', 
-        relay: str = None,
-        no_validator_gadget = False
+        relay: Optional[str] = None,
+        no_validator_gadget: bool = False
     ) -> None:
-        if not logging.getLogger().hasHandlers():
-            logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s - %(levelname)s - %(message)s')
+        self._setup_logging(log_level)
         
-        default_path = os.path.join(Path.home(), '.pyxatu_config.json')
-        if not config_path is None and not os.path.isfile(default_path):
-            raise ValueError("~/.pyxatu_config.json file not found\nRun `xatu setup` to copy the default config file to your HOME directory and then add your credentials to it. Alternatively you can use environment variables.")
-        
-        if config_path is None:
-            self.config_path = default_path
-        else:
-            self.config_path = config_path
+        self.config_path = self._resolve_config_path(config_path)
         
         if use_env_variables:
-            config = self.read_clickhouse_config_from_env()
-            self.clickhouse_url, self.clickhouse_user, self.clickhouse_password = config
+            self.clickhouse_url, self.clickhouse_user, self.clickhouse_password = self._read_config_from_env()
         else:
-            print("Config Path: ", self.config_path)
-            assert os.path.isfile(self.config_path) == True, "Config file not found."
-            config = self.read_clickhouse_config_locally()
-            self.clickhouse_url, self.clickhouse_user, self.clickhouse_password = config
+            logging.info(f"Using config file: {self.config_path}")
+            self.clickhouse_url, self.clickhouse_user, self.clickhouse_password = self._read_config_from_file()
 
         logging.info(f"Clickhouse URL: {self.clickhouse_url}, User: {self.clickhouse_user}")
         self.client = ClickhouseClient(self.clickhouse_url, self.clickhouse_user, self.clickhouse_password)
@@ -89,9 +78,35 @@ class PyXatu:
         self.update_all_column_docs()
         
         self.no_validator_gadget = no_validator_gadget
+    
+    def _setup_logging(self, log_level: str) -> None:
+        """Setup logging configuration if not already configured."""
+        if not logging.getLogger().hasHandlers():
+            logging.basicConfig(
+                level=getattr(logging, log_level.upper()), 
+                format='%(asctime)s - %(levelname)s - %(message)s'
+            )
+    
+    def _resolve_config_path(self, config_path: Optional[str]) -> str:
+        """Resolve and validate the configuration file path."""
+        default_path = os.path.join(Path.home(), '.pyxatu_config.json')
+        
+        if config_path is None:
+            if not os.path.isfile(default_path):
+                raise ValueError(
+                    "~/.pyxatu_config.json file not found\n"
+                    "Run `xatu setup` to copy the default config file to your HOME directory "
+                    "and then add your credentials to it. Alternatively you can use environment variables."
+                )
+            return default_path
+        
+        if not os.path.isfile(config_path):
+            raise ValueError(f"Config file not found: {config_path}")
+        
+        return config_path
         
         
-    def read_clickhouse_config_from_env(self) -> Tuple[str, str, str]:
+    def _read_config_from_env(self) -> Tuple[str, str, str]:
         """Reads Clickhouse configuration from environment variables."""
         clickhouse_user = os.getenv("CLICKHOUSE_USER", "default_user")
         clickhouse_password = os.getenv("CLICKHOUSE_PASSWORD", "default_password")
@@ -100,7 +115,7 @@ class PyXatu:
         logging.info("Clickhouse configs set")
         return url, clickhouse_user, clickhouse_password
 
-    def read_clickhouse_config_locally(self) -> Tuple[str, str, str]:
+    def _read_config_from_file(self) -> Tuple[str, str, str]:
         """Reads Clickhouse configuration from the config file."""
         with open(self.config_path, 'r') as file:
             config = json.load(file)
@@ -119,7 +134,7 @@ class PyXatu:
         if self.no_validator_gadget == True:
             self._validators = None
         elif not hasattr(self, '_validators'):
-            self._validators = ValidatorGadget()
+            self._validators = ValidatorGadget(client=self.client)
         return self._validators
     
     @property
@@ -190,7 +205,7 @@ class PyXatu:
             if arg in argument_types:
                 types_list.append(argument_types[arg])
             else:
-                (f"Argument '{arg}' is not recognized.")
+                logging.warning(f"Argument '{arg}' is not recognized.")
 
         return types_list
 
@@ -351,13 +366,37 @@ class PyXatu:
         add_inclusion_delay: bool = True,
         **kwargs
     ) -> Any:
-
-        if not isinstance(slot, list):
-            slot = [slot, slot + 1]
+        """Get elaborated attestation data with validator status information."""
+        slot_range = self._normalize_slot_range(slot)
+        attestations, duties = self._fetch_attestation_data(slot_range, columns, orderby, **kwargs)
         
+        status_data = []
+        vote_types = [vt.strip() for vt in what.split(",")]
+        status_types = [st.strip() for st in only_status.split(",")]
+        
+        for _slot in tqdm(sorted(attestations.slot.unique()), desc="Processing slots"):
+            slot_data = self._process_slot_attestations(
+                _slot, attestations, duties, vote_types, status_types, add_inclusion_delay
+            )
+            status_data.extend(slot_data)
+        
+        columns = ["slot", "validator", "status", "vote_type"]
+        if add_inclusion_delay:
+            columns.append("inclusion_delay")
+            
+        return pd.DataFrame(status_data, columns=columns).sort_values("slot").drop_duplicates().reset_index(drop=True)
+    
+    def _normalize_slot_range(self, slot: Optional[Union[int, List[int]]]) -> List[int]:
+        """Convert slot input to a normalized range."""
+        if not isinstance(slot, list):
+            return [slot, slot + 1]
+        return slot
+    
+    def _fetch_attestation_data(self, slot_range: List[int], columns: str, orderby: Optional[str], **kwargs):
+        """Fetch attestation and duty data for the given slot range."""
         required_columns = ["slot", "block_slot", "source_root", "target_root", "validators", "beacon_block_root"]
         
-        kwargs["slot"] = [slot[0]//32 * 32, slot[-1]//32 * 32 + 32]
+        kwargs["slot"] = [slot_range[0]//32 * 32, slot_range[-1]//32 * 32 + 32]
         kwargs["columns"] = self.clean_columns(columns, required_columns)
         kwargs["orderby"] = orderby
         
@@ -367,59 +406,80 @@ class PyXatu:
         kwargs["limit"] = None
         kwargs["orderby"] = None
         
-        duties = self.get_duties(**kwargs) 
-
-        # Initialize empty list to store all status data
-        status_data = []
-
-        # Process each slot
-        for _slot in tqdm(sorted(attestations.slot.unique()), desc="Processing slots"):
-            head, target, source = self.get_checkpoints(_slot)
-            _attestations = attestations[attestations["slot"] == _slot]
-            _duties = duties[duties["slot"] == _slot]
-            assert len(_duties) > 0, "Something wrong with retrieving duties."
-            _all = set(_duties.validators.tolist())
-            voting_validators = set(_attestations.validators.tolist())
-            
-            df_delay = None
-            if add_inclusion_delay:
-                #df_delay =  _attestations[_attestations["validators"].isin(failing_validators)]
-                df_delay = _attestations[["validators", "slot", "block_slot"]].drop_duplicates().dropna()
-                df_delay["delay"] = df_delay["block_slot"] - df_delay["slot"]
-                df_delay = df_delay[["delay", "validators"]].set_index("validators").to_dict()["delay"]
-                final_columns=["slot", "validator", "status", "vote_type", "inclusion_delay"]
-            else:
-                final_columns=["slot", "validator", "status", "vote_type"]
-
-            def get_delay(v: str):
-                if v not in df_delay.keys():
-                    return None
-                return df_delay.get(v)
-
-            def process_vote(vote_type: str, root_value: str) -> None:
-                correct = set(_attestations.loc[_attestations[f"{vote_type}_root"] == root_value, 'validators'])
-                correct = correct.intersection(_all)
-                failing_validators = _all.intersection(voting_validators) - correct
-                offline_validators = _all - voting_validators
-                
-                if "correct" in only_status:
-                    status_data.extend([(_slot, v, "correct", vote_type, get_delay(v)) for v in correct])
-                if "failed" in only_status:
-                    status_data.extend([(_slot, v, "failed", vote_type, get_delay(v)) for v in failing_validators])
-                if "offline" in only_status:
-                    status_data.extend([(_slot, v, "offline", vote_type, get_delay(v)) for v in offline_validators])      
-
-            if "source" in what:
-                process_vote("source", source)
-            if "target" in what:
-                process_vote("target", target)
-            if "head" in what:
-                process_vote("beacon_block", head)
-
-        final_df = pd.DataFrame(status_data, columns=final_columns).sort_values("slot")
-        final_df = final_df.drop_duplicates().reset_index(drop=True)
-
-        return final_df  
+        duties = self.get_duties(**kwargs)
+        
+        return attestations, duties
+    
+    def _process_slot_attestations(
+        self, 
+        slot: int, 
+        attestations: pd.DataFrame, 
+        duties: pd.DataFrame, 
+        vote_types: List[str], 
+        status_types: List[str],
+        add_inclusion_delay: bool
+    ) -> List[tuple]:
+        """Process attestations for a single slot."""
+        head, target, source = self.get_checkpoints(slot)
+        slot_attestations = attestations[attestations["slot"] == slot]
+        slot_duties = duties[duties["slot"] == slot]
+        
+        if len(slot_duties) == 0:
+            raise ValueError(f"No duties found for slot {slot}")
+        
+        all_validators = set(slot_duties.validators.tolist())
+        voting_validators = set(slot_attestations.validators.tolist())
+        
+        delay_map = self._build_delay_map(slot_attestations) if add_inclusion_delay else {}
+        
+        slot_data = []
+        vote_map = {"source": source, "target": target, "head": head}
+        
+        for vote_type in vote_types:
+            if vote_type in vote_map:
+                root_col = "beacon_block_root" if vote_type == "head" else f"{vote_type}_root"
+                slot_data.extend(
+                    self._process_vote_type(
+                        slot, slot_attestations, all_validators, voting_validators,
+                        vote_type, root_col, vote_map[vote_type], status_types, delay_map
+                    )
+                )
+        
+        return slot_data
+    
+    def _build_delay_map(self, attestations: pd.DataFrame) -> dict:
+        """Build inclusion delay mapping for validators."""
+        delay_df = attestations[["validators", "slot", "block_slot"]].drop_duplicates().dropna()
+        delay_df["delay"] = delay_df["block_slot"] - delay_df["slot"]
+        return delay_df.set_index("validators")["delay"].to_dict()
+    
+    def _process_vote_type(
+        self, 
+        slot: int, 
+        attestations: pd.DataFrame, 
+        all_validators: set, 
+        voting_validators: set,
+        vote_type: str, 
+        root_column: str, 
+        expected_root: str, 
+        status_types: List[str],
+        delay_map: dict
+    ) -> List[tuple]:
+        """Process a specific vote type for validator status."""
+        correct = set(attestations.loc[attestations[root_column] == expected_root, 'validators'])
+        correct = correct.intersection(all_validators)
+        failed = all_validators.intersection(voting_validators) - correct
+        offline = all_validators - voting_validators
+        
+        results = []
+        if "correct" in status_types:
+            results.extend([(slot, v, "correct", vote_type, delay_map.get(v)) for v in correct])
+        if "failed" in status_types:
+            results.extend([(slot, v, "failed", vote_type, delay_map.get(v)) for v in failed])
+        if "offline" in status_types:
+            results.extend([(slot, v, "offline", vote_type, delay_map.get(v)) for v in offline])
+        
+        return results  
  
     def get_beacon_block_v2(self, **kwargs) -> Any:
         block = self._generic_getter('beacon_api_eth_v2_beacon_block', **kwargs)
@@ -692,7 +752,7 @@ class PyXatu:
                 if _c == "" or _c == " ":
                     continue
                 print("\n" + f"{_c.strip()} not in {table} with columns:" + '\n'.join(existing_columns))
-                print("\nExisting columns: " + '\n'.join(self.all_table_info.get(table)[0].to_list()))
+                print("\nExisting columns: " + '\n'.join(self.all_table_info.get(table)[0].tolist()))
                 return False
         return True
     

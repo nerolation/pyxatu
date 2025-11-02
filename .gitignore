@@ -122,3 +122,5 @@ lib/
 lib64/
 pyvenv.cfg
 share/
+.pyxatu_config.json
+*.parquet

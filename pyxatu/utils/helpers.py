@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import List
 from typing import Optional
 
-from pyxatu.utils import CONSTANTS
+from .constants import CONSTANTS
 
 
 class PyXatuHelpers:

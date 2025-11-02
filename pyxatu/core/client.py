@@ -7,10 +7,17 @@ from datetime import datetime, timezone
 from typing import Optional, List, Any
 from requests.auth import HTTPBasicAuth
 
-from pyxatu.utils import retry_on_failure, CONSTANTS
-from pyxatu.helpers import PyXatuHelpers
+from ..utils import retry_on_failure, CONSTANTS
+from ..utils.helpers import PyXatuHelpers
 
 class ClickhouseClient:
+    """
+    Client for executing queries against ClickHouse database.
+    
+    Handles authentication, query execution, and response parsing
+    for the Xatu ClickHouse database.
+    """
+    
     def __init__(self, url: str, user: str, password: str, timeout: int = 1500, helper: Any = None) -> None:
         self.url = url
         self.auth = HTTPBasicAuth(user, password)
@@ -19,42 +26,69 @@ class ClickhouseClient:
 
     @retry_on_failure()
     def execute_query(self, query: str, columns: Optional[str] = "*", handle_columns: bool = False) -> pd.DataFrame:
-        _logging=True
-        if "FROM system.columns" in query:
-            _logging = False
-        else:
-            if not "meta_network_name" in query:
-                logging.info("No network specified. You are requesting info across testnets and mainnet.")
-                return
-        if _logging:
+        """Execute a ClickHouse query and return the result as a DataFrame."""
+        should_log = self._should_log_query(query)
+        
+        if should_log:
             logging.info(f"Executing query: {query}")
+        
+        if not self._has_network_filter(query):
+            logging.warning("No network specified. You are requesting info across testnets and mainnet.")
+            return None
+        
         start_time = time.time()
-        response = requests.get(
-            self.url,
-            params={'query': query},
-            auth=self.auth,
-            timeout=self.timeout
-        )
-        if _logging:
-            logging.info(f"Query executed in {time.time() - start_time:.2f} seconds")
-        response.raise_for_status()
-        if handle_columns:
+        
+        try:
+            response = requests.get(
+                self.url,
+                params={'query': query},
+                auth=self.auth,
+                timeout=self.timeout
+            )
+            response.raise_for_status()
+            
+            if should_log:
+                logging.info(f"Query executed in {time.time() - start_time:.2f} seconds")
+            
+            if not response.text.strip():
+                if should_log:
+                    logging.info("No data returned for query")
+                return None
+            
+            potential_columns = self._extract_column_names(query) if handle_columns else None
+            return self._parse_response(response.text, columns, potential_columns)
+            
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Query execution failed: {e}")
+            raise
+    
+    def _should_log_query(self, query: str) -> bool:
+        """Determine if query execution should be logged."""
+        return "FROM system.columns" not in query
+    
+    def _has_network_filter(self, query: str) -> bool:
+        """Check if query includes network filtering."""
+        return "meta_network_name" in query or "FROM system.columns" in query
+    
+    def _extract_column_names(self, query: str) -> Optional[str]:
+        """Extract column names from SELECT clause."""
+        try:
             if "DISTINCT" in query.upper():
                 potential_columns = query.split("FROM")[0].split("DISTINCT")[1].strip()
             else:
                 potential_columns = query.split("FROM")[0].split("SELECT")[1].strip()
-            if potential_columns != "*" and "," in potential_columns:
-                potential_columns = ",".join([i.split("as ")[-1].strip() if "as " in i else i.strip() for i in potential_columns.split(",")])
-            elif potential_columns != "*":
-                potential_columns = [i.split("as ")[-1].strip() if "as " in i else i.strip() for i in [potential_columns]] 
-        else:
-            potential_columns = None
-        if response.text == "":
-            if _logging:
-                logging.info("No data for query")
-            return None
             
-        return self._parse_response(response.text, columns, potential_columns)
+            if potential_columns == "*":
+                return None
+            
+            if "," in potential_columns:
+                columns = [col.split("as ")[-1].strip() if "as " in col else col.strip() 
+                          for col in potential_columns.split(",")]
+                return ",".join(columns)
+            else:
+                return potential_columns.split("as ")[-1].strip() if "as " in potential_columns else potential_columns.strip()
+        except (IndexError, AttributeError):
+            return None
 
     def _parse_response(self, response_text: str, columns: Optional[str] = "*", potential_columns: Optional[str] = None) -> pd.DataFrame:
         """Converts response text to a Pandas DataFrame and assigns column names if provided."""
