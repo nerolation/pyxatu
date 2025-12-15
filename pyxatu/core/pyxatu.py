@@ -54,12 +54,12 @@ class PyXatu:
     ) -> None:
         self._setup_logging(log_level)
         
-        self.config_path = self._resolve_config_path(config_path)
-        
         if use_env_variables:
             self.clickhouse_url, self.clickhouse_user, self.clickhouse_password = self._read_config_from_env()
         else:
             logging.info(f"Using config file: {self.config_path}")
+        
+            self.config_path = self._resolve_config_path(config_path)
             self.clickhouse_url, self.clickhouse_user, self.clickhouse_password = self._read_config_from_file()
 
         logging.info(f"Clickhouse URL: {self.clickhouse_url}, User: {self.clickhouse_user}")
