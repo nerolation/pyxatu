@@ -134,7 +134,7 @@ class ValidatorGadget:
         except Exception as e:
             self.logger.error(f"Error initializing label manager: {e}")
             self._entity_mappings = {}
-            self._validator_labels = pd.DataFrame(columns=['validator_index', 'entity'])
+            self._validator_labels = pd.DataFrame(columns=['validator_index', 'entity', 'exited', 'pubkey'])
     
     def _is_cache_valid(self, cache_path: Path) -> bool:
         if not cache_path.exists():
@@ -284,26 +284,28 @@ class ValidatorGadget:
     def _build_validator_labels(self) -> None:
         try:
             base_labels = self._get_ethseer_labels()
-            
+
             if base_labels.empty:
                 self.logger.warning("No base labels available from ethseer_validator_entity")
-                self._validator_labels = pd.DataFrame(columns=['validator_index', 'entity', 'exited'])
+                self._validator_labels = pd.DataFrame(columns=['validator_index', 'entity', 'exited', 'pubkey'])
                 return
-            
+
             self._validator_labels = base_labels
-            
+
             self._validator_labels = self._apply_exit_information(self._validator_labels)
-            
+
             self._validator_labels = self._apply_lido_operator_labels(self._validator_labels)
-            
+
+            self._validator_labels = self._apply_validator_pubkeys(self._validator_labels)
+
             if not self._validator_labels.empty:
                 self._validator_labels.to_parquet(self.labels_cache, index=False)
-                
+
             self.logger.info(f"Built labels for {len(self._validator_labels)} validators")
-            
+
         except Exception as e:
             self.logger.error(f"Error building validator labels: {e}")
-            self._validator_labels = pd.DataFrame(columns=['validator_index', 'entity', 'exited'])
+            self._validator_labels = pd.DataFrame(columns=['validator_index', 'entity', 'exited', 'pubkey'])
     
     def _get_ethseer_labels(self) -> pd.DataFrame:
         try:
@@ -342,7 +344,58 @@ class ValidatorGadget:
         except Exception as e:
             self.logger.error(f"Failed to get ethseer labels: {e}")
             return pd.DataFrame()
-    
+
+    def _get_validator_pubkeys(self) -> pd.DataFrame:
+        """Fetch validator pubkeys from canonical_beacon_validators_pubkeys table."""
+        try:
+            if not self.client:
+                return pd.DataFrame(columns=['validator_index', 'pubkey'])
+
+            query = """
+            SELECT DISTINCT
+                index as validator_index,
+                pubkey
+            FROM canonical_beacon_validators_pubkeys
+            WHERE meta_network_name = 'mainnet'
+            ORDER BY index
+            """
+
+            result = self.client.execute_query(query)
+            if result is None or result.empty:
+                return pd.DataFrame(columns=['validator_index', 'pubkey'])
+
+            # Set proper column names if not already set
+            if len(result.columns) == 2 and result.columns[0] == 0:
+                result.columns = ['validator_index', 'pubkey']
+
+            self.logger.info(f"Retrieved {len(result)} validator pubkeys from canonical_beacon_validators_pubkeys")
+
+            return result
+
+        except Exception as e:
+            self.logger.error(f"Failed to get validator pubkeys: {e}")
+            return pd.DataFrame(columns=['validator_index', 'pubkey'])
+
+    def _apply_validator_pubkeys(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Merge validator pubkeys into the labels DataFrame."""
+        try:
+            pubkeys = self._get_validator_pubkeys()
+
+            if pubkeys.empty:
+                df['pubkey'] = None
+                return df
+
+            df = df.merge(pubkeys, on='validator_index', how='left')
+
+            matched = df['pubkey'].notna().sum()
+            self.logger.info(f"Matched {matched} validators with pubkeys")
+
+        except Exception as e:
+            self.logger.error(f"Failed to apply validator pubkeys: {e}")
+            df['pubkey'] = None
+
+        return df
+
     def _apply_exit_information(self, df: pd.DataFrame) -> pd.DataFrame:
         try:
             if not self.client:
@@ -557,5 +610,5 @@ class ValidatorGadget:
     def mapping(self):
         if hasattr(self, '_validator_labels') and self._validator_labels is not None:
             return self._validator_labels
-        return pd.DataFrame(columns=['validator_index', 'entity'])
+        return pd.DataFrame(columns=['validator_index', 'entity', 'exited', 'pubkey'])
          
