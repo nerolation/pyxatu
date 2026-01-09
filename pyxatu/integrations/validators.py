@@ -401,7 +401,7 @@ class ValidatorGadget:
             if not self.client:
                 df['exited'] = False
                 return df
-                
+
             voluntary_query = """
             SELECT DISTINCT
                 voluntary_exit_data_validator_index as validator_index,
@@ -409,11 +409,15 @@ class ValidatorGadget:
             FROM canonical_beacon_block_voluntary_exit
             WHERE meta_network_name = 'mainnet'
             """
-            
+
             voluntary_exits = self.client.execute_query(voluntary_query)
             if voluntary_exits is None:
-                voluntary_exits = pd.DataFrame(columns=['validator_index'])
-            
+                voluntary_exits = pd.DataFrame(columns=['validator_index', 'exit_type'])
+            else:
+                # Set proper column names if not already set
+                if len(voluntary_exits.columns) == 2 and voluntary_exits.columns[0] == 0:
+                    voluntary_exits.columns = ['validator_index', 'exit_type']
+
             attester_query = """
             SELECT DISTINCT
                 arrayJoin(attestation_1_attesting_indices) as validator_index,
@@ -421,21 +425,25 @@ class ValidatorGadget:
             FROM canonical_beacon_block_attester_slashing
             WHERE meta_network_name = 'mainnet'
             """
-            
+
             attester_slashings = self.client.execute_query(attester_query)
             if attester_slashings is None:
-                attester_slashings = pd.DataFrame(columns=['validator_index'])
-            
+                attester_slashings = pd.DataFrame(columns=['validator_index', 'exit_type'])
+            else:
+                # Set proper column names if not already set
+                if len(attester_slashings.columns) == 2 and attester_slashings.columns[0] == 0:
+                    attester_slashings.columns = ['validator_index', 'exit_type']
+
             all_exits = pd.concat([voluntary_exits, attester_slashings], ignore_index=True)
-            
+
             df['exited'] = df['validator_index'].isin(all_exits['validator_index'])
-            
+
             self.logger.info(f"Marked {df['exited'].sum()} validators as exited")
-            
+
         except Exception as e:
             self.logger.error(f"Failed to apply exit information: {e}")
             df['exited'] = False
-        
+
         return df
     
     def _apply_lido_operator_labels(self, df: pd.DataFrame) -> pd.DataFrame:
