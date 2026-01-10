@@ -130,7 +130,8 @@ class ValidatorGadget:
             if self._validator_labels is not None:
                 labeled = self._validator_labels['entity'].notna().sum()
                 total = len(self._validator_labels)
-                self.logger.info(f"Labeled {labeled:,}/{total:,} validators ({labeled/total*100:.1f}%)")
+                if total > 0:
+                    self.logger.info(f"Labeled {labeled:,}/{total:,} validators ({labeled/total*100:.1f}%)")
         except Exception as e:
             self.logger.error(f"Error initializing label manager: {e}")
             self._entity_mappings = {}
@@ -148,11 +149,19 @@ class ValidatorGadget:
         try:
             entities = self._parse_spellbook()
             cex_addresses = self._parse_cex_addresses()
-            
+
             for entity_name, addresses in cex_addresses.items():
                 if entity_name in entities:
+                    # Merge addresses into existing entity
                     entities[entity_name].depositor_addresses.update(addresses)
-            
+                else:
+                    # Create new entity for CEX not in Spellbook
+                    entities[entity_name] = EntityMapping(
+                        entity=entity_name,
+                        category="CEX",
+                        depositor_addresses=addresses
+                    )
+
             entities = self._apply_custom_entity_logic(entities)
             
             self._save_entity_mappings(entities)
@@ -170,7 +179,9 @@ class ValidatorGadget:
             response.raise_for_status()
             content = response.text
             
-            pattern = r"\('(0x[a-fA-F0-9]+)',\s*'([^']+)'\)"
+            # New format: (0xaddress, 'entity', 'entity_unique_name', 'category')
+            # Addresses are now unquoted hex literals
+            pattern = r"\((0x[a-fA-F0-9]+),\s*'([^']+)'"
             matches = re.findall(pattern, content)
             
             for depositor, entity_name in matches:
@@ -193,26 +204,28 @@ class ValidatorGadget:
     
     def _parse_cex_addresses(self) -> Dict[str, Set[str]]:
         cex_addresses = {}
-        
+
         try:
             response = requests.get(self.CEX_URL, timeout=30)
             response.raise_for_status()
             content = response.text
-            
-            pattern = r"\('ethereum',\s*'([^']+)',\s*'(0x[a-fA-F0-9]+)'"
+
+            # New format: (0xaddress, 'cex_name', 'distinct_name', 'added_by', date '...')
+            # Addresses are now unquoted hex literals
+            pattern = r"\((0x[a-fA-F0-9]+),\s*'([^']+)'"
             matches = re.findall(pattern, content)
-            
-            for exchange_name, address in matches:
+
+            for address, exchange_name in matches:
                 exchange_lower = exchange_name.lower()
                 if exchange_lower not in cex_addresses:
                     cex_addresses[exchange_lower] = set()
                 cex_addresses[exchange_lower].add(address.lower())
-            
+
             self.logger.info(f"Parsed {len(cex_addresses)} CEX entities")
-            
+
         except Exception as e:
             self.logger.error(f"Failed to parse CEX addresses: {e}")
-        
+
         return cex_addresses
     
     def _categorize_entity(self, entity_name: str) -> str:
@@ -506,23 +519,23 @@ class ValidatorGadget:
             
             query = f"""
             SELECT
-                topic_1,
-                topic_2,
+                topic1,
+                topic2,
                 data,
                 block_number
             FROM canonical_execution_logs
             WHERE address = '{self.LIDO_CONTRACT}'
-              AND topic_0 = '{sig_hash}'
+              AND topic0 = '{sig_hash}'
               AND meta_network_name = 'mainnet'
             ORDER BY block_number
             """
-            
+
             result = self.client.execute_query(query)
             if result is None or result.empty:
                 return operators
-            
+
             for _, row in result.iterrows():
-                operator_id = int(row['topic_1'], 16)
+                operator_id = int(row['topic1'], 16)
                 
                 data = row['data']
                 if data.startswith('0x'):
