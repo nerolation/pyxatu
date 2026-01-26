@@ -34,7 +34,6 @@ class ClickhouseClient:
         
         if not self._has_network_filter(query):
             logging.warning("No network specified. You are requesting info across testnets and mainnet.")
-            return None
         
         start_time = time.time()
         
